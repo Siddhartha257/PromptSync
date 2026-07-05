@@ -1,10 +1,9 @@
 import logging
 import time
-from typing import Type
+from typing import Type, Optional
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 
 # Setup Logging
 logger = logging.getLogger("llm_caller")
@@ -14,30 +13,42 @@ if not logger.handlers:
         format="%(levelname)s | %(name)s | %(message)s",
     )
 
-load_dotenv()
-
 class LLMCaller:
-    def __init__(self, model_name: str = "gemini-3.1-flash-lite", max_retries: int = 3, retry_delay: float = 2.0):
-        # Switching default model to standard stable model just in case, but can be overridden
-        self.client = genai.Client()
+    def __init__(self, api_key: str, model_name: str = "gemini-3.1-flash-lite", thinking_level: str = "Low", max_retries: int = 3, retry_delay: float = 2.0):
+        self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
+        self.thinking_level = thinking_level
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+
+    def _get_thinking_config(self) -> Optional[types.ThinkingConfig]:
+        if self.thinking_level == "Low":
+            return types.ThinkingConfig(thinking_budget=1024)
+        elif self.thinking_level == "Medium":
+            return types.ThinkingConfig(thinking_budget=4096)
+        elif self.thinking_level == "High":
+            return types.ThinkingConfig(thinking_budget=8192)
+        return None
 
     def run(self, input_text: str, system_prompt: str, json_format: Type[BaseModel]) -> str:
         for attempt in range(1, self.max_retries + 1):
             try:
                 logger.info(f"Calling LLM ({self.model_name}) - Attempt {attempt}/{self.max_retries}")
                 
-                # Using the modern generate_content API
+                config = types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json",
+                    response_schema=json_format
+                )
+                
+                thinking = self._get_thinking_config()
+                if thinking:
+                    config.thinking_config = thinking
+
                 response = self.client.models.generate_content(
                     model=self.model_name,
                     contents=input_text,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        response_mime_type="application/json",
-                        response_schema=json_format
-                    )
+                    config=config
                 )
                 logger.info("LLM call successful.")
                 return response.text
@@ -58,6 +69,10 @@ class LLMCaller:
         if json_format:
             config.response_mime_type = "application/json"
             config.response_schema = json_format
+
+        thinking = self._get_thinking_config()
+        if thinking:
+            config.thinking_config = thinking
 
         try:
             response = self.client.models.generate_content_stream(

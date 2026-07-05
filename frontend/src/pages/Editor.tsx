@@ -3,13 +3,18 @@ import axios from 'axios';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
 import { Play, CheckCircle, AlertCircle, ArrowRight, Check, ShieldCheck } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import CodeMirror from '@uiw/react-codemirror';
+import { json } from '@codemirror/lang-json';
+import { markdown } from '@codemirror/lang-markdown';
 import { ThemeContext } from '../context/ThemeContext';
+import { useSettings } from '../context/SettingsContext';
 import { API_URL } from '../services/api';
 import '../index.css';
 
 export default function Editor() {
   const location = useLocation();
   const { theme } = React.useContext(ThemeContext);
+  const { settings, setIsSettingsOpen } = useSettings();
 
   const [prompt, setPrompt] = useState(
     location.state?.initialPrompt || ''
@@ -45,11 +50,17 @@ export default function Editor() {
   const [outputVerificationResult, setOutputVerificationResult] = useState<{ is_aligned: boolean; reason: string } | null>(null);
 
   const handleOrchestrate = async () => {
+    if (!settings.apiKey) {
+      setIsSettingsOpen(true);
+      return;
+    }
     if (!userRequest.trim()) return;
     setIsLoading(true);
     setVerificationResult(null);
     try {
       const res = await axios.post(`${API_URL}/orchestrate`, {
+        api_key: settings.apiKey,
+        config: settings.orchestrator,
         prompt,
         json_schema: schema,
         user_request: userRequest,
@@ -67,9 +78,12 @@ export default function Editor() {
   };
 
   const handleVerify = async () => {
+    if (!settings.apiKey) { setIsSettingsOpen(true); return; }
     setIsVerifying(true);
     try {
       const res = await axios.post(`${API_URL}/verify`, {
+        api_key: settings.apiKey,
+        config: settings.verifier,
         prompt_instruction: promptInstruction,
         schema_instruction: schemaInstruction,
       });
@@ -82,9 +96,12 @@ export default function Editor() {
   };
 
   const handleVerifyOutput = async () => {
+    if (!settings.apiKey) { setIsSettingsOpen(true); return; }
     setIsOutputVerifying(true);
     try {
       const res = await axios.post(`${API_URL}/verify_output`, {
+        api_key: settings.apiKey,
+        config: settings.verifier,
         prompt,
         json_schema: schema,
       });
@@ -100,9 +117,12 @@ export default function Editor() {
   };
 
   const handleApply = async () => {
+    if (!settings.apiKey) { setIsSettingsOpen(true); return; }
     setIsApplying(true);
     try {
       const res = await axios.post(`${API_URL}/apply_edits`, {
+        api_key: settings.apiKey,
+        config: settings.generators,
         prompt,
         json_schema: schema,
         prompt_instruction: runPromptAgent ? promptInstruction : '',
@@ -134,12 +154,14 @@ export default function Editor() {
         <div className="split-pane">
           <div className="pane">
             <div className="pane-header">System Prompt</div>
-            <div className="editor-container">
-              <textarea
-                className="textarea-editor"
+            <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none' }}>
+              <CodeMirror
                 value={prompt}
-                onChange={e => setPrompt(e.target.value)}
-                spellCheck={false}
+                height="100%"
+                extensions={[markdown()]}
+                onChange={(value) => setPrompt(value)}
+                theme={theme === 'dark' ? 'dark' : 'light'}
+                style={{ flex: 1, fontSize: '0.85rem' }}
                 placeholder="Your system prompt will appear here..."
               />
             </div>
@@ -149,12 +171,14 @@ export default function Editor() {
 
           <div className="pane">
             <div className="pane-header">JSON Schema</div>
-            <div className="editor-container">
-              <textarea
-                className="textarea-editor"
+            <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none' }}>
+              <CodeMirror
                 value={schema}
-                onChange={e => setSchema(e.target.value)}
-                spellCheck={false}
+                height="100%"
+                extensions={[json()]}
+                onChange={(value) => setSchema(value)}
+                theme={theme === 'dark' ? 'dark' : 'light'}
+                style={{ flex: 1, fontSize: '0.85rem' }}
                 placeholder="Your JSON schema will appear here..."
               />
             </div>
@@ -245,13 +269,17 @@ export default function Editor() {
                     Run agent
                   </label>
                 </div>
-                <textarea
-                  className="instruction-editor"
-                  value={promptInstruction}
-                  onChange={e => setPromptInstruction(e.target.value)}
-                  disabled={!runPromptAgent}
-                  style={{ opacity: runPromptAgent ? 1 : 0.4, minHeight: 180 }}
-                />
+                <div style={{ flex: 1, overflow: 'auto', display: 'flex', minHeight: 180, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', opacity: runPromptAgent ? 1 : 0.4 }}>
+                  <CodeMirror
+                    value={promptInstruction}
+                    height="100%"
+                    extensions={[markdown()]}
+                    onChange={(value) => setPromptInstruction(value)}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    editable={runPromptAgent}
+                    style={{ flex: 1, fontSize: '0.82rem' }}
+                  />
+                </div>
               </div>
 
               {/* Schema instruction */}
@@ -263,13 +291,17 @@ export default function Editor() {
                     Run agent
                   </label>
                 </div>
-                <textarea
-                  className="instruction-editor"
-                  value={schemaInstruction}
-                  onChange={e => setSchemaInstruction(e.target.value)}
-                  disabled={!runSchemaAgent}
-                  style={{ opacity: runSchemaAgent ? 1 : 0.4, minHeight: 180 }}
-                />
+                <div style={{ flex: 1, overflow: 'auto', display: 'flex', minHeight: 180, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', opacity: runSchemaAgent ? 1 : 0.4 }}>
+                  <CodeMirror
+                    value={schemaInstruction}
+                    height="100%"
+                    extensions={[markdown()]}
+                    onChange={(value) => setSchemaInstruction(value)}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    editable={runSchemaAgent}
+                    style={{ flex: 1, fontSize: '0.82rem' }}
+                  />
+                </div>
               </div>
 
               {/* Verification result */}
@@ -303,7 +335,7 @@ export default function Editor() {
       {/* ── DIFF REVIEW MODAL ── */}
       {showDiffModal && (
         <div className="modal-overlay">
-          <div className="modal-content glass-modal" style={{ maxWidth: 1440, height: '94vh' }}>
+          <div className="modal-content glass-modal" style={{ maxWidth: '96vw', height: '94vh' }}>
             <div className="modal-header">
               <div>
                 <h2>Review Changes</h2>

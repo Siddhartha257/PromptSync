@@ -1,16 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
   Bot, Wand2, Edit3, ArrowRight, Play, CheckCircle,
   GitBranch, Layers, ShieldCheck, Cpu, Zap
 } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
 import { API_URL } from '../services/api';
 import '../index.css';
 
 export default function Home() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { settings, setIsSettingsOpen } = useSettings();
 
   const [mode, setMode] = useState<'select' | 'scratch'>('select');
   const [userRequest, setUserRequest] = useState('');
@@ -66,10 +68,16 @@ export default function Home() {
   }, [mode, showDualStreams]);
 
   const handleGeneratePlan = async () => {
+    if (!settings.apiKey) {
+      setIsSettingsOpen(true);
+      return;
+    }
     if (!userRequest.trim()) return;
     setIsPlanning(true);
     try {
       const res = await axios.post(`${API_URL}/orchestrate`, {
+        api_key: settings.apiKey,
+        config: settings.orchestrator,
         prompt: '',
         json_schema: '',
         user_request: userRequest,
@@ -119,9 +127,9 @@ export default function Home() {
     setGeneratedSchema('');
     const promises = [];
     if (runPromptAgent)
-      promises.push(streamFromEndpoint('stream/prompt', { instruction: promptInstruction, target_model: targetModel }, chunk => setGeneratedPrompt(p => p + chunk)));
+      promises.push(streamFromEndpoint('stream/prompt', { api_key: settings.apiKey, config: settings.generators, instruction: promptInstruction, target_model: targetModel }, chunk => setGeneratedPrompt(p => p + chunk)));
     if (runSchemaAgent)
-      promises.push(streamFromEndpoint('stream/schema', { instruction: schemaInstruction }, chunk => setGeneratedSchema(p => p + chunk)));
+      promises.push(streamFromEndpoint('stream/schema', { api_key: settings.apiKey, config: settings.generators, instruction: schemaInstruction }, chunk => setGeneratedSchema(p => p + chunk)));
     try { await Promise.all(promises); } catch { alert('Streaming failed.'); }
     finally { setIsStreaming(false); }
   };

@@ -481,12 +481,11 @@ body {
 ───────────────────────────────────────────── */
 .diff-wrapper {
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
-  overflow: hidden;
 }
 
 /* Override the library's internal styles */

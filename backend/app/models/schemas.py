@@ -1,30 +1,46 @@
 from typing import Any, List, Optional
 from pydantic import BaseModel, Field
 
+class AgentConfig(BaseModel):
+    model: str = "gemini-3.1-flash-lite"
+    thinking_level: str = "Low"
+
 # --- API Models ---
 class StreamPromptRequest(BaseModel):
+    api_key: str
+    config: AgentConfig
     instruction: str
     target_model: str
 
 class StreamSchemaRequest(BaseModel):
+    api_key: str
+    config: AgentConfig
     instruction: str
 
 class OrchestrateRequest(BaseModel):
+    api_key: str
+    config: AgentConfig
     prompt: str
     json_schema: str
     user_request: str
 
 class ApplyEditsRequest(BaseModel):
+    api_key: str
+    config: AgentConfig
     prompt: str
     json_schema: str
     prompt_instruction: str
     schema_instruction: str
 
 class VerifyRequest(BaseModel):
+    api_key: str
+    config: AgentConfig
     prompt_instruction: str
     schema_instruction: str
 
 class VerifyOutputRequest(BaseModel):
+    api_key: str
+    config: AgentConfig
     prompt: str
     json_schema: str
 

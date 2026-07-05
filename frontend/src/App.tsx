@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
-import { Moon, Sun, Zap } from 'lucide-react';
+import { Moon, Sun, Zap, Settings } from 'lucide-react';
 import HomePage from './pages/Home';
 import EditorPage from './pages/Editor';
 import { ThemeContext } from './context/ThemeContext';
+import { SettingsProvider, useSettings } from './context/SettingsContext';
+import SettingsModal from './components/SettingsModal';
 import './index.css';
 
 function GlobalLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { theme, toggleTheme } = React.useContext(ThemeContext);
+  const { setIsSettingsOpen } = useSettings();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -47,15 +50,21 @@ function GlobalLayout({ children }: { children: React.ReactNode }) {
           <span className="header-title">PromptSync</span>
         </button>
 
-        {/* Right: Theme toggle */}
-        <button className="icon-btn" onClick={toggleTheme} title="Toggle theme">
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
+        {/* Right: Actions */}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button className="icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">
+            <Settings size={18} />
+          </button>
+          <button className="icon-btn" onClick={toggleTheme} title="Toggle theme">
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </div>
       </header>
 
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
         {children}
       </div>
+      <SettingsModal />
     </div>
   );
 }
@@ -73,14 +82,16 @@ function App() {
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      <BrowserRouter>
-        <GlobalLayout>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/editor" element={<EditorPage />} />
-          </Routes>
-        </GlobalLayout>
-      </BrowserRouter>
+      <SettingsProvider>
+        <BrowserRouter>
+          <GlobalLayout>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/editor" element={<EditorPage />} />
+            </Routes>
+          </GlobalLayout>
+        </BrowserRouter>
+      </SettingsProvider>
     </ThemeContext.Provider>
   );
 }

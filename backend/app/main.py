@@ -23,20 +23,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize singletons
-llm_caller = LLMCaller()
-orchestrator = Orch(llm_caller=llm_caller)
-prompt_updater = PromptUpdaterAgent(llm_caller=llm_caller)
-schema_updater = SchemaUpdaterAgent(llm_caller=llm_caller)
-prompt_creator = PromptCreatorAgent(llm_caller=llm_caller)
-schema_creator = SchemaCreatorAgent(llm_caller=llm_caller)
-verification_agent = VerificationAgent(llm_caller=llm_caller)
 json_patch_engine = JsonSchemaPatchEngine(debug=True)
+
+def get_caller(req_base) -> LLMCaller:
+    return LLMCaller(
+        api_key=req_base.api_key,
+        model_name=req_base.config.model,
+        thinking_level=req_base.config.thinking_level
+    )
 
 @app.post("/api/stream/prompt")
 def stream_prompt(req: StreamPromptRequest):
     def iter_stream():
         try:
+            caller = get_caller(req)
+            prompt_creator = PromptCreatorAgent(llm_caller=caller)
             stream = prompt_creator.generate_stream(req.instruction, req.target_model)
             for chunk in stream:
                 yield f"data: {json.dumps({'text': chunk})}\n\n"
@@ -50,6 +51,8 @@ def stream_prompt(req: StreamPromptRequest):
 def stream_schema(req: StreamSchemaRequest):
     def iter_stream():
         try:
+            caller = get_caller(req)
+            schema_creator = SchemaCreatorAgent(llm_caller=caller)
             stream = schema_creator.generate_stream(req.instruction)
             for chunk in stream:
                 yield f"data: {json.dumps({'text': chunk})}\n\n"
@@ -62,6 +65,8 @@ def stream_schema(req: StreamSchemaRequest):
 @app.post("/api/orchestrate")
 def orchestrate_update(req: OrchestrateRequest):
     try:
+        caller = get_caller(req)
+        orchestrator = Orch(llm_caller=caller)
         schema_plan = orchestrator.run(
             prompt=req.prompt,
             json_schema=req.json_schema,
@@ -74,6 +79,10 @@ def orchestrate_update(req: OrchestrateRequest):
 @app.post("/api/apply_edits")
 def apply_edits(req: ApplyEditsRequest):
     try:
+        caller = get_caller(req)
+        prompt_updater = PromptUpdaterAgent(llm_caller=caller)
+        schema_updater = SchemaUpdaterAgent(llm_caller=caller)
+
         new_prompt = req.prompt
         if req.prompt_instruction.strip():
             edits = prompt_updater.generate_edits(req.prompt, req.prompt_instruction)
@@ -99,6 +108,8 @@ def apply_edits(req: ApplyEditsRequest):
 @app.post("/api/verify")
 def verify_alignment(req: VerifyRequest):
     try:
+        caller = get_caller(req)
+        verification_agent = VerificationAgent(llm_caller=caller)
         result = verification_agent.verify_alignment(req.prompt_instruction, req.schema_instruction)
         return result
     except Exception as e:
@@ -107,6 +118,8 @@ def verify_alignment(req: VerifyRequest):
 @app.post("/api/verify_output")
 def verify_output(req: VerifyOutputRequest):
     try:
+        caller = get_caller(req)
+        verification_agent = VerificationAgent(llm_caller=caller)
         result = verification_agent.verify_outputs(req.prompt, req.json_schema)
         return result
     except Exception as e:
