@@ -10,9 +10,11 @@ It implements a **Dual-Agent pipeline** to help developers architect, iterate, a
 
 *   **Dual-Agent Orchestration**: Breaks down complex natural language intents into coordinated sub-instructions for Prompt (System Instructions) and Schema (JSON Output Constraints) agents.
 *   **Real-time Split-Pane Streaming**: Watch prompt logic and JSON Schema materialize simultaneously, side-by-side.
-*   **Deterministic Alignment Verification**: Automatically cross-references system prompts against JSON schemas to check for missing properties, ghost fields, or constraint conflicts using LLMs.
+*   **Full-Featured Code Editor**: Integrated CodeMirror with line numbers, synchronized scrolling, and real-time syntax highlighting for JSON and Markdown.
+*   **Deterministic Alignment Verification**: Automatically cross-references system prompts against JSON schemas to check for missing properties, ghost fields, or constraint conflicts.
 *   **Surgical Diff Editing**: Apply edits using text search-replace engines and RFC 6902 JSON patch engines. Review word-level diffs side-by-side before updating your workspace.
-*   **Modular Architecture**: Isolated prompt assets, type-safe API schemas, and robust error handling built for scale.
+*   **Granular Multi-Agent Configs**: Independently configure LLM models (e.g. Gemini 3.5 Flash, 3.1 Pro) and explicit Thinking Budgets for the Orchestrator, Generator, and Verifier agents.
+*   **Secure & Deployment Ready**: API keys are handled purely in-memory via React state and payload injection, with zero backend persistence. Ready for platforms like Render and Vercel.
 
 ---
 
@@ -43,13 +45,16 @@ PromptSync/
 │
 └── frontend/
     ├── src/
+    │   ├── components/
+    │   │   └── SettingsModal.tsx # Multi-agent configuration and API key modal
     │   ├── context/
-    │   │   └── ThemeContext.tsx # HMR-friendly theme provider
+    │   │   ├── ThemeContext.tsx  # HMR-friendly theme provider
+    │   │   └── SettingsContext.tsx # Secure in-memory settings & API key store
     │   ├── services/
     │   │   └── api.ts          # Centralized API service configuration
     │   ├── pages/
     │   │   ├── Home.tsx        # Hero landing page & scratch building
-    │   │   └── Editor.tsx      # Split-pane IDE workspace & diff reviewer
+    │   │   └── Editor.tsx      # Split-pane IDE workspace with CodeMirror
     │   ├── App.tsx             # Root router & persistent layout wrapper
     │   └── index.css           # Glassmorphic UI design tokens & theme layers
     └── vite.config.ts          # Vite asset pipeline configuration
@@ -81,11 +86,7 @@ PromptSync/
    ```bash
    pip install -r requirements.txt
    ```
-4. Create a `.env` file in the `backend/` directory:
-   ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
-   ```
-5. Run the server:
+4. Run the server:
    ```bash
    uvicorn app.main:app --reload
    ```
@@ -107,7 +108,7 @@ PromptSync/
    ```bash
    npm run dev
    ```
-   *The frontend will boot up on `http://localhost:5173`.*
+   *The frontend will boot up on `http://localhost:5173`. When the UI loads, click the Settings Gear icon in the top right to enter your Gemini API key securely in-memory.*
 
 ---
 

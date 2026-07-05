@@ -147,20 +147,20 @@ export default function Home() {
     },
     {
       icon: <Layers size={24} />,
-      title: 'Real-time Split Streaming',
-      desc: 'Watch your Prompt and JSON Schema materialize simultaneously in a full-screen split pane. Every token, live.',
+      title: 'Full-Featured Editor',
+      desc: 'CodeMirror integration providing line numbers, real-time syntax highlighting for JSON & Markdown, and synchronized split-pane scrolling.',
       delay: 'reveal-delay-1',
     },
     {
-      icon: <ShieldCheck size={24} />,
-      title: 'Deterministic Verification',
-      desc: 'A dedicated Verification Agent cross-checks every field, constraint, and key name to guarantee zero drift between your Prompt and Schema.',
+      icon: <Cpu size={24} />,
+      title: 'Granular Multi-Agent Configs',
+      desc: 'Independently configure LLM models and explicit Thinking Budgets for the Orchestrator, Generator, and Verifier agents.',
       delay: 'reveal-delay-2',
     },
     {
-      icon: <Cpu size={24} />,
-      title: 'Surgical Diff Editing',
-      desc: 'Apply precise search-replace edits and RFC 6902 JSON patches. Review exact word-level diffs before accepting any change.',
+      icon: <ShieldCheck size={24} />,
+      title: 'Secure & Deployment Ready',
+      desc: 'Render-ready architecture. API keys are handled purely in-memory via React state and payload injection, with zero backend persistence.',
       delay: 'reveal-delay-3',
     },
   ];
