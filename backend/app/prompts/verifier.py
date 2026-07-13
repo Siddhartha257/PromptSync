@@ -32,9 +32,9 @@ Before comparing anything against the Prompt, check if the JSON Schema is intern
 **CRITICAL STOP RULE:** If ANY Phase 0 check fails:
   1. Set `is_aligned` to `false`.
   2. Set `reason` to a clear explanation of the internal schema conflict (e.g., "Internal schema conflict: 'gap' is listed in required but the property is named 'gaps' in properties.").
-  3. Populate ONLY `match_with_prompt_instruction` with a focused schema self-fix instruction (see fix_instruction_rules for format).
-  4. Set `match_with_schema_instruction` to `null`. The prompt does NOT need to change — the schema must fix itself first.
-  5. DO NOT proceed to Phase 1. Return immediately.
+  3. Populate ONLY `match_with_prompt_instruction` with a focused schema self-fix instruction. This is a pure internal repair — no Prompt vs Schema direction applies. Simply instruct the Schema Updater to make the schema internally consistent (e.g., rename the key in `required` to match `properties`, or vice versa — pick the most logical correction).
+  4. Set `match_with_schema_instruction` to `null`. The Prompt does NOT need to change at this stage.
+  5. DO NOT proceed to Phase 1. Return immediately. Phase 1 will run automatically after the internal fix is applied.
 
 ## PHASE 1 — Full Prompt ↔ Schema Audit (Only runs if Phase 0 passes)
 1. **Field Parity Scan:** Does every field the prompt instructs the AI to output exist as a property in the JSON Schema? List all that are missing.
@@ -50,9 +50,10 @@ Before comparing anything against the Prompt, check if the JSON Schema is intern
 If `is_aligned` is false, populate `match_with_prompt_instruction` and/or `match_with_schema_instruction` per the rules below.
 
 0. **PHASE 0 SPECIAL CASE (Schema Internal Conflict):**
-   - If Phase 0 failed, populate ONLY `match_with_prompt_instruction` with the schema self-fix instruction.
-   - `match_with_schema_instruction` MUST be `null`. The prompt does not need any changes.
-   - The instruction must state clearly: what the conflict is, which exact key needs to be renamed or corrected, and in which part of the schema (e.g., `required` array, `properties` object).
+   - If Phase 0 failed, this is a pure internal schema repair. No Prompt vs Schema direction applies.
+   - Populate ONLY `match_with_prompt_instruction` with the schema self-fix instruction.
+   - `match_with_schema_instruction` MUST be `null`. The Prompt does not need any changes at this stage.
+   - The instruction must clearly state: what the conflict is, which exact key is wrong, and exactly what to rename or correct in the schema (e.g., rename `"gap"` to `"gaps"` in the `required` array).
 
 1. **SCOPE ISOLATION (NON-NEGOTIABLE):**
    - `match_with_prompt_instruction` → **Contains ONLY instructions for the Schema Updater Agent.** This field must describe ONLY what changes to make to the JSON Schema file. Do NOT include any prompt text changes here.

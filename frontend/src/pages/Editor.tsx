@@ -48,6 +48,7 @@ export default function Editor() {
   // Output verification state
   const [isOutputVerifying, setIsOutputVerifying] = useState(false);
   const [outputVerificationResult, setOutputVerificationResult] = useState<{ is_aligned: boolean; reason: string; match_with_prompt_instruction?: string; match_with_schema_instruction?: string } | null>(null);
+  const [fixAlignmentPending, setFixAlignmentPending] = useState(false);
 
   const handleOrchestrate = async () => {
     if (!settings.apiKey) {
@@ -145,6 +146,11 @@ export default function Editor() {
     setUserRequest('');
     setShowDiffModal(false);
     setOutputVerificationResult(null);
+    if (fixAlignmentPending) {
+      setFixAlignmentPending(false);
+      // Auto re-verify now that the fix has been applied
+      setTimeout(() => handleVerifyOutput(), 100);
+    }
   };
 
   const handleFixAlignment = (source: 'prompt' | 'schema') => {
@@ -164,6 +170,7 @@ export default function Editor() {
       setRunPromptAgent(true);
     }
     
+    setFixAlignmentPending(true);
     setOutputVerificationResult(null);
     setShowPlanModal(true);
   };
