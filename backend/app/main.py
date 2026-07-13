@@ -1,8 +1,14 @@
 import os
 import json
+import json_repair
+import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+
+logger = logging.getLogger("api")
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
 
 from app.core.llm import LLMCaller
 from app.agents.orchestrator import Orch
@@ -11,12 +17,12 @@ from app.agents.verification import VerificationAgent
 from app.utils.patcher import apply_llm_edits
 from app.utils.json_patcher import JsonSchemaPatchEngine
 from app.models.schemas import (
-    StreamPromptRequest, StreamSchemaRequest, OrchestrateRequest, ApplyEditsRequest, VerifyRequest, VerifyOutputRequest
+    StreamPromptRequest, StreamSchemaRequest, OrchestrateRequest, ApplyEditsRequest, VerifyRequest, VerifyOutputRequest, TrialRunRequest
 )
 
 app = FastAPI(title="Prompter Studio API")
 
-frontend_url_env = os.getenv("FRONTEND_URL", "http://localhost:5173")
+frontend_url_env = os.getenv("FRONTEND_URL", "*")
 allowed_origins = [url.strip() for url in frontend_url_env.split(",")]
 
 app.add_middleware(
@@ -30,10 +36,12 @@ app.add_middleware(
 json_patch_engine = JsonSchemaPatchEngine(debug=True)
 
 def get_caller(req_base) -> LLMCaller:
+    temperature = getattr(req_base.config, 'temperature', 0.7)
     return LLMCaller(
         api_key=req_base.api_key,
         model_name=req_base.config.model,
-        thinking_level=req_base.config.thinking_level
+        thinking_level=req_base.config.thinking_level,
+        temperature=temperature
     )
 
 @app.post("/api/stream/prompt")
@@ -95,8 +103,19 @@ def apply_edits(req: ApplyEditsRequest):
 
         new_schema = req.json_schema
         if req.schema_instruction.strip():
+            logger.info("Applying schema edits...")
+            try:
+                schema_dict = json.loads(req.json_schema)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Invalid JSON detected, attempting auto-repair: {str(e)}")
+                try:
+                    schema_dict = json_repair.loads(req.json_schema)
+                    logger.info("Auto-repair successful.")
+                except Exception as repair_e:
+                    logger.error(f"Auto-repair failed: {str(repair_e)}")
+                    raise HTTPException(status_code=422, detail=f"Your JSON Schema has a syntax error that could not be auto-repaired. Please fix it manually: {str(e)}")
+            
             patches = schema_updater.generate_edits(req.json_schema, req.schema_instruction)
-            schema_dict = json.loads(req.json_schema)
             patch_result = json_patch_engine.apply(schema_dict, patches)
             if not patch_result.success:
                 raise Exception(f"JSON Patch Failed: {patch_result.error}")
@@ -106,6 +125,8 @@ def apply_edits(req: ApplyEditsRequest):
             "new_prompt": new_prompt,
             "new_json_schema": new_schema
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -127,4 +148,67 @@ def verify_output(req: VerifyOutputRequest):
         result = verification_agent.verify_outputs(req.prompt, req.json_schema)
         return result
     except Exception as e:
+        logger.error(f"Full document verification failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def sanitize_schema_for_gemini(schema):
+    """Recursively removes keys that the Gemini SDK's OpenAPI 3.0 parser rejects."""
+    if not isinstance(schema, dict):
+        return schema
+        
+    sanitized = {}
+    for key, value in schema.items():
+        if key in ["$schema", "$id", "additionalProperties", "default", "title"]:
+            continue
+            
+        if isinstance(value, dict):
+            sanitized[key] = sanitize_schema_for_gemini(value)
+        elif isinstance(value, list):
+            sanitized[key] = [sanitize_schema_for_gemini(item) if isinstance(item, dict) else item for item in value]
+        else:
+            sanitized[key] = value
+            
+    return sanitized
+
+@app.post("/api/trial_run")
+def trial_run(req: TrialRunRequest):
+    logger.info("Received /api/trial_run request")
+    try:
+        caller = get_caller(req)
+        
+        # Parse user schema
+        try:
+            schema_dict = json.loads(req.json_schema)
+        except json.JSONDecodeError:
+            try:
+                schema_dict = json_repair.loads(req.json_schema)
+            except Exception as e:
+                raise HTTPException(status_code=422, detail=f"Your JSON Schema has syntax errors. Please fix them before running a trial: {str(e)}")
+
+        # Sanitize schema for Gemini OpenAPI 3.0 compatibility
+        schema_dict = sanitize_schema_for_gemini(schema_dict)
+
+        # Construct input
+        input_text = ""
+        if req.knowledge_base.strip():
+            input_text += f"Knowledge Base:\n{req.knowledge_base}\n\n"
+        input_text += f"Query:\n{req.query}"
+
+        # Run LLM
+        result = caller.run(
+            input_text=input_text,
+            system_prompt=req.prompt,
+            json_format=schema_dict
+        )
+        
+        # Parse the result back to JSON string with indentation for display
+        try:
+            parsed_result = json.loads(result)
+            formatted_result = json.dumps(parsed_result, indent=2)
+        except:
+            formatted_result = result
+            
+        return {"result": formatted_result}
+    except Exception as e:
+        logger.error(f"Trial run failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

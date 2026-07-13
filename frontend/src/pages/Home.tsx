@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -7,12 +7,17 @@ import {
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { API_URL } from '../services/api';
+import { ThemeContext } from '../context/ThemeContext';
+import CodeMirror from '@uiw/react-codemirror';
+import { markdown } from '@codemirror/lang-markdown';
+import { json } from '@codemirror/lang-json';
 import '../index.css';
 
 export default function Home() {
   const navigate = useNavigate();
   const location = useLocation();
   const { settings, setIsSettingsOpen } = useSettings();
+  const { theme } = useContext(ThemeContext);
 
   const [mode, setMode] = useState<'select' | 'scratch'>('select');
   const [userRequest, setUserRequest] = useState('');
@@ -49,13 +54,7 @@ export default function Home() {
     }
   }, [location.state, navigate]);
 
-  // Scroll auto-follow
-  useEffect(() => {
-    promptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [generatedPrompt]);
-  useEffect(() => {
-    schemaEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [generatedSchema]);
+  // Auto-scroll was removed because it caused unwanted horizontal viewport shifting (scrolling to the left) during stream generation
 
   // Scroll reveal observer
   useEffect(() => {
@@ -163,10 +162,22 @@ export default function Home() {
       desc: 'Render-ready architecture. API keys are handled purely in-memory via React state and payload injection, with zero backend persistence.',
       delay: 'reveal-delay-3',
     },
+    {
+      icon: <Play size={24} />,
+      title: 'Integrated Trial Run Console',
+      desc: 'Instantly test your schema and prompt against live APIs. Supports Gemma 4 and Gemini models with configurable thinking budgets.',
+      delay: 'reveal-delay-4',
+    },
+    {
+      icon: <Wand2 size={24} />,
+      title: 'Auto-Fix Alignment',
+      desc: 'A dedicated Verification Agent constantly audits your schema and prompt for contradictions, automatically patching them into perfect sync.',
+      delay: 'reveal-delay-5',
+    },
   ];
 
   return (
-    <div className="home-page">
+    <div className="home-page" style={showDualStreams ? { height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' } : {}}>
       {!showDualStreams && (
         <>
           {/* ── HERO ─────────────────────────────── */}
@@ -344,7 +355,7 @@ export default function Home() {
 
       {/* ── DUAL STREAM VIEW ── */}
       {showDualStreams && (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+        <>
           {/* Top bar */}
           <div style={{
             padding: '12px 24px',
@@ -373,41 +384,37 @@ export default function Home() {
           <div className="split-pane" style={{ flex: 1 }}>
             <div className="pane">
               <div className="pane-header">Prompt Generation Stream</div>
-              <div className="editor-container">
-                <div style={{
-                  height: '100%',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.82rem',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 1.7,
-                  color: 'var(--text-primary)',
-                  padding: 4,
-                }}>
-                  {generatedPrompt || <span style={{ color: 'var(--text-muted)' }}>Waiting for stream…</span>}
-                  <div ref={promptEndRef} />
-                </div>
+              <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none' }}>
+                <CodeMirror
+                  value={generatedPrompt}
+                  height="100%"
+                  extensions={[markdown()]}
+                  theme={theme === 'dark' ? 'dark' : 'light'}
+                  editable={false}
+                  style={{ flex: 1, fontSize: '0.85rem' }}
+                  placeholder="Waiting for stream…"
+                />
+                <div ref={promptEndRef} />
               </div>
             </div>
             <div className="pane-divider" />
             <div className="pane">
               <div className="pane-header">Schema Generation Stream</div>
-              <div className="editor-container">
-                <div style={{
-                  height: '100%',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.82rem',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 1.7,
-                  color: 'var(--text-primary)',
-                  padding: 4,
-                }}>
-                  {generatedSchema || <span style={{ color: 'var(--text-muted)' }}>Waiting for stream…</span>}
-                  <div ref={schemaEndRef} />
-                </div>
+              <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none' }}>
+                <CodeMirror
+                  value={generatedSchema}
+                  height="100%"
+                  extensions={[json()]}
+                  theme={theme === 'dark' ? 'dark' : 'light'}
+                  editable={false}
+                  style={{ flex: 1, fontSize: '0.85rem' }}
+                  placeholder="Waiting for stream…"
+                />
+                <div ref={schemaEndRef} />
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* ── PLAN REVIEW MODAL ── */}
@@ -433,13 +440,17 @@ export default function Home() {
                     Execute
                   </label>
                 </div>
-                <textarea
-                  className="instruction-editor"
-                  value={promptInstruction}
-                  onChange={e => setPromptInstruction(e.target.value)}
-                  disabled={!runPromptAgent}
-                  style={{ opacity: runPromptAgent ? 1 : 0.4, minHeight: 200 }}
-                />
+                <div style={{ flex: 1, overflow: 'auto', display: 'flex', minHeight: 200, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', opacity: runPromptAgent ? 1 : 0.4 }}>
+                  <CodeMirror
+                    value={promptInstruction}
+                    height="100%"
+                    extensions={[markdown()]}
+                    onChange={(value) => setPromptInstruction(value)}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    editable={runPromptAgent}
+                    style={{ flex: 1, fontSize: '0.82rem' }}
+                  />
+                </div>
               </div>
 
               <div className="instruction-group">
@@ -450,13 +461,17 @@ export default function Home() {
                     Execute
                   </label>
                 </div>
-                <textarea
-                  className="instruction-editor"
-                  value={schemaInstruction}
-                  onChange={e => setSchemaInstruction(e.target.value)}
-                  disabled={!runSchemaAgent}
-                  style={{ opacity: runSchemaAgent ? 1 : 0.4, minHeight: 200 }}
-                />
+                <div style={{ flex: 1, overflow: 'auto', display: 'flex', minHeight: 200, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', opacity: runSchemaAgent ? 1 : 0.4 }}>
+                  <CodeMirror
+                    value={schemaInstruction}
+                    height="100%"
+                    extensions={[markdown()]}
+                    onChange={(value) => setSchemaInstruction(value)}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    editable={runSchemaAgent}
+                    style={{ flex: 1, fontSize: '0.82rem' }}
+                  />
+                </div>
               </div>
             </div>
 

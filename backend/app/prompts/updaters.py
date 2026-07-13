@@ -52,8 +52,11 @@ Before finalizing your patches, you MUST run through this checklist for every si
 </consistency_checklist>
 
 <guidelines>
-1. **Operations**: Use 'add' to insert new keys, 'replace' to modify existing values, and 'remove' to delete.
-2. **Paths**: Use standard JSON Pointer syntax (e.g., `/properties/new_field`, `/required/0`).
+1. **Operations**: Use 'add' to insert new keys or append to arrays, 'replace' to modify existing values, and 'remove' to delete.
+2. **Paths (CRITICAL)**: You MUST use standard RFC 6902 JSON Pointer syntax.
+   - For nested objects: `/properties/new_field`
+   - To APPEND to an array (like `required`), you MUST use the `-` character: `/required/-`
+   - NEVER guess numeric array indices (e.g., `/required/2`). Always use `/required/-` for additions.
 3. **EXACT KEY NAMES**: Use the EXACT property names specified in the instructions. DO NOT alter casing or spelling.
 4. **MANDATORY DESCRIPTIONS**: Any new property added MUST include a comprehensive `"description"` field that accurately reflects its purpose.
 5. **No Hallucinations**: Strictly obey the UPDATE INSTRUCTION. DO NOT add any extra properties, constraints, or metadata not explicitly listed.

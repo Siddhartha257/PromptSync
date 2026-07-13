@@ -5,3 +5,4 @@ google-genai>=0.3.0
 jsonpatch>=1.33
 diff-match-patch>=20230430
 python-dotenv>=1.0.0
+json-repair==0.61.4

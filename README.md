@@ -11,9 +11,11 @@ It implements a **Dual-Agent pipeline** to help developers architect, iterate, a
 *   **Dual-Agent Orchestration**: Breaks down complex natural language intents into coordinated sub-instructions for Prompt (System Instructions) and Schema (JSON Output Constraints) agents.
 *   **Real-time Split-Pane Streaming**: Watch prompt logic and JSON Schema materialize simultaneously, side-by-side.
 *   **Full-Featured Code Editor**: Integrated CodeMirror with line numbers, synchronized scrolling, and real-time syntax highlighting for JSON and Markdown.
+*   **Integrated Trial Run Console**: Instantly test your schema and prompt against live APIs. Supports Gemma 4 and Gemini models with configurable thinking budgets.
 *   **Deterministic Alignment Verification**: Automatically cross-references system prompts against JSON schemas to check for missing properties, ghost fields, or constraint conflicts.
+*   **Auto-Fix Alignment**: A dedicated Verification Agent constantly audits your schema and prompt for contradictions, automatically patching them into perfect sync if requested.
 *   **Surgical Diff Editing**: Apply edits using text search-replace engines and RFC 6902 JSON patch engines. Review word-level diffs side-by-side before updating your workspace.
-*   **Granular Multi-Agent Configs**: Independently configure LLM models (e.g. Gemini 3.5 Flash, 3.1 Pro) and explicit Thinking Budgets for the Orchestrator, Generator, and Verifier agents.
+*   **Granular Multi-Agent Configs**: Independently configure LLM models (e.g. Gemini 3.5 Flash, Gemma 4 31B) and explicit Thinking Budgets for the Orchestrator, Generator, and Verifier agents.
 *   **Secure & Deployment Ready**: API keys are handled purely in-memory via React state and payload injection, with zero backend persistence. Ready for platforms like Render and Vercel.
 
 ---

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
-import { Play, CheckCircle, AlertCircle, ArrowRight, Check, ShieldCheck } from 'lucide-react';
+import { Play, CheckCircle, AlertCircle, ArrowRight, Check, ShieldCheck, ChevronRight, ChevronDown, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { ThemeContext } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
+import CustomSelect from '../components/CustomSelect';
 import { API_URL } from '../services/api';
 import '../index.css';
 
@@ -49,6 +50,44 @@ export default function Editor() {
   const [isOutputVerifying, setIsOutputVerifying] = useState(false);
   const [outputVerificationResult, setOutputVerificationResult] = useState<{ is_aligned: boolean; reason: string; match_with_prompt_instruction?: string; match_with_schema_instruction?: string } | null>(null);
   const [fixAlignmentPending, setFixAlignmentPending] = useState(false);
+
+  // Trial run state
+  const [showTrialModal, setShowTrialModal] = useState(false);
+  const [trialModel, setTrialModel] = useState('gemini-3.1-flash-lite');
+  const [trialTemperature, setTrialTemperature] = useState(0.7);
+  const [trialThinking, setTrialThinking] = useState('Low');
+  const [trialKb, setTrialKb] = useState('');
+  const [trialQuery, setTrialQuery] = useState('');
+  const [trialResult, setTrialResult] = useState('');
+  const [isTrialRunning, setIsTrialRunning] = useState(false);
+
+  const handleTrialRun = async () => {
+    if (!settings.apiKey) { setIsSettingsOpen(true); return; }
+    if (!trialQuery.trim()) { alert('Query is required'); return; }
+    
+    setIsTrialRunning(true);
+    setTrialResult('');
+    
+    try {
+      const res = await axios.post(`${API_URL}/trial_run`, {
+        api_key: settings.apiKey,
+        config: {
+          model: trialModel,
+          temperature: trialTemperature,
+          thinking_level: trialThinking
+        },
+        prompt: prompt,
+        json_schema: schema,
+        knowledge_base: trialKb,
+        query: trialQuery
+      });
+      setTrialResult(res.data.result);
+    } catch (err: any) {
+      setTrialResult(err.response?.data?.detail || err.message);
+    } finally {
+      setIsTrialRunning(false);
+    }
+  };
 
   const handleOrchestrate = async () => {
     if (!settings.apiKey) {
@@ -161,13 +200,13 @@ export default function Editor() {
     if (source === 'schema') {
       setPromptInstruction('');
       setRunPromptAgent(false);
-      const aiInstruction = outputVerificationResult.match_with_prompt_instruction || outputVerificationResult.reason;
+      const aiInstruction = outputVerificationResult.schema_updater_instruction || outputVerificationResult.reason;
       setSchemaInstruction(aiInstruction);
       setRunSchemaAgent(true);
     } else {
       setSchemaInstruction('');
       setRunSchemaAgent(false);
-      const aiInstruction = outputVerificationResult.match_with_schema_instruction || outputVerificationResult.reason;
+      const aiInstruction = outputVerificationResult.prompt_updater_instruction || outputVerificationResult.reason;
       setPromptInstruction(aiInstruction);
       setRunPromptAgent(true);
     }
@@ -238,7 +277,7 @@ export default function Editor() {
               
               {!outputVerificationResult.is_aligned && (
                 <div style={{ display: 'flex', gap: 12, marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border-color)' }}>
-                  {outputVerificationResult.match_with_prompt_instruction && (
+                  {outputVerificationResult.schema_updater_instruction && (
                     <button 
                       className="btn btn-primary" 
                       onClick={() => handleFixAlignment('schema')}
@@ -247,7 +286,7 @@ export default function Editor() {
                       Fix Schema (Match to Prompt)
                     </button>
                   )}
-                  {outputVerificationResult.match_with_schema_instruction && (
+                  {outputVerificationResult.prompt_updater_instruction && (
                     <button 
                       className="btn btn-outline" 
                       onClick={() => handleFixAlignment('prompt')}
@@ -292,6 +331,16 @@ export default function Editor() {
         >
           {isLoading ? <div className="loader" style={{ borderTopColor: '#fff' }} /> : <Play size={15} />}
           Generate Plan
+        </button>
+
+        <button
+          className="btn btn-outline"
+          onClick={() => setShowTrialModal(true)}
+          style={{ minWidth: 120 }}
+          title="Test run your prompt and schema"
+        >
+          <Play size={15} />
+          Trial Run
         </button>
       </footer>
 
@@ -462,6 +511,139 @@ export default function Editor() {
               <button className="btn btn-primary" onClick={acceptChanges}>
                 <Check size={15} /> Accept Changes
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── TRIAL RUN MODAL ── */}
+      {showTrialModal && (
+        <div className="modal-overlay">
+          <div className="modal-content glass-modal" style={{ maxWidth: '90%', width: '1400px', height: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            
+            {/* ── HEADER ── */}
+            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <div>
+                <h2>Trial Run Console</h2>
+              </div>
+              <button className="btn btn-outline" onClick={() => setShowTrialModal(false)} style={{ padding: 8 }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* ── CONFIG TOOLBAR ── */}
+            <div className="toolbar">
+              <div className="toolbar-group">
+                <span className="toolbar-label">Model</span>
+                <CustomSelect 
+                  value={trialModel} 
+                  onChange={setTrialModel}
+                  options={[
+                    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+                    { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
+                    { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash' },
+                    { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite' },
+                    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+                    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+                    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+                    { value: 'gemma-4-31b-it', label: 'Gemma 4 (31B)' },
+                    { value: 'gemma-4-26b-a4b-it', label: 'Gemma 4 (26B A4B)' }
+                  ]}
+                  style={{ minWidth: 200 }}
+                />
+              </div>
+
+              <div className="toolbar-group" style={{ marginLeft: 16 }}>
+                <span className="toolbar-label">Thinking</span>
+                <CustomSelect 
+                  value={trialThinking} 
+                  onChange={setTrialThinking}
+                  options={[
+                    { value: 'Low', label: 'Low (1k)' },
+                    { value: 'Medium', label: 'Medium (4k)' },
+                    { value: 'High', label: 'High (8k)' },
+                    { value: 'None', label: 'None' }
+                  ]}
+                  style={{ minWidth: 140 }}
+                />
+              </div>
+
+              <div className="toolbar-group" style={{ marginLeft: 16 }}>
+                <span className="toolbar-label">Temp: {trialTemperature}</span>
+                <input
+                  type="range"
+                  className="toolbar-slider"
+                  min="0" max="2" step="0.1"
+                  value={trialTemperature}
+                  onChange={e => setTrialTemperature(parseFloat(e.target.value))}
+                />
+              </div>
+
+              <div style={{ flex: 1 }} />
+
+              <button
+                className="btn btn-primary"
+                onClick={handleTrialRun}
+                disabled={isTrialRunning || !trialQuery.trim()}
+                style={{ padding: '6px 20px', minWidth: 120, height: 32 }}
+              >
+                {isTrialRunning ? <div className="loader" style={{ width: 14, height: 14, borderWidth: 2, borderTopColor: '#fff' }} /> : <><Play size={14} /> Run Trial</>}
+              </button>
+            </div>
+
+            {/* ── EDGE-TO-EDGE SPLIT PANE ── */}
+            <div className="split-pane" style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+              {isTrialRunning && (
+                <div style={{ position: 'absolute', inset: 0, background: 'var(--bg-glass)', backdropFilter: 'blur(4px)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div className="loader" style={{ width: 30, height: 30, borderWidth: 3, borderTopColor: 'var(--accent-primary)' }} />
+                </div>
+              )}
+              
+              <div className="pane" style={{ flex: '0 0 45%', minHeight: 0 }}>
+                <div className="pane-header">Knowledge Base (Optional)</div>
+                <div className="editor-container" style={{ flex: 1, padding: 0, display: 'flex', minHeight: 0 }}>
+                  <CodeMirror
+                    value={trialKb}
+                    height="100%"
+                    extensions={[markdown()]}
+                    onChange={setTrialKb}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    style={{ flex: 1, fontSize: '0.85rem' }}
+                    placeholder="Paste documents, emails, or context data here..."
+                  />
+                </div>
+                
+                <div className="pane-divider" style={{ width: '100%', height: 1 }} />
+                
+                <div className="pane-header">User Query</div>
+                <div className="editor-container" style={{ flex: 1, padding: 0, display: 'flex', minHeight: 0 }}>
+                  <CodeMirror
+                    value={trialQuery}
+                    height="100%"
+                    extensions={[]}
+                    onChange={setTrialQuery}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    style={{ flex: 1, fontSize: '0.85rem' }}
+                    placeholder="What should the model do?"
+                  />
+                </div>
+              </div>
+
+              <div className="pane-divider" />
+
+              <div className="pane" style={{ minHeight: 0 }}>
+                <div className="pane-header">LLM Output (JSON)</div>
+                <div className="editor-container" style={{ flex: 1, padding: 0, display: 'flex', minHeight: 0 }}>
+                  <CodeMirror
+                    value={trialResult}
+                    height="100%"
+                    extensions={[json()]}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    editable={false}
+                    style={{ flex: 1, fontSize: '0.85rem' }}
+                    placeholder="Output will appear here..."
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>

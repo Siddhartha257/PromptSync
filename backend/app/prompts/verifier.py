@@ -28,12 +28,13 @@ Before comparing anything against the Prompt, check if the JSON Schema is intern
 - **Required/Properties Sync:** Does every string listed in the `required` array exist as an exact key in `properties`? (e.g., if `required` contains `"gap"` but `properties` has `"gaps"`, this is an internal conflict.)
 - **Duplicate Keys:** Are there any duplicate property names inside `properties`?
 - **Broken References:** Do any `$ref` or `dependencies` entries point to keys that do not exist?
+- **Internal Logic Conflict:** Do the descriptions within the schema contradict the schema's own constraints? (e.g., description says "between 0 and 1" but maximum is 2).
 
 **CRITICAL STOP RULE:** If ANY Phase 0 check fails:
   1. Set `is_aligned` to `false`.
-  2. Set `reason` to a clear explanation of the internal schema conflict (e.g., "Internal schema conflict: 'gap' is listed in required but the property is named 'gaps' in properties.").
-  3. Populate ONLY `match_with_prompt_instruction` with a focused schema self-fix instruction. This is a pure internal repair — no Prompt vs Schema direction applies. Simply instruct the Schema Updater to make the schema internally consistent (e.g., rename the key in `required` to match `properties`, or vice versa — pick the most logical correction).
-  4. Set `match_with_schema_instruction` to `null`. The Prompt does NOT need to change at this stage.
+  2. Set `reason` to a clear explanation starting with EXACTLY "Internal Schema Conflict: " followed by the issue.
+  3. Populate ONLY `schema_updater_instruction` with a focused schema self-fix instruction. This is a pure internal repair — no Prompt vs Schema direction applies. Simply instruct the Schema Updater to make the schema internally consistent (e.g., rename the key in `required` to match `properties`, or vice versa — pick the most logical correction).
+  4. Set `prompt_updater_instruction` to `null`. The Prompt does NOT need to change at this stage.
   5. DO NOT proceed to Phase 1. Return immediately. Phase 1 will run automatically after the internal fix is applied.
 
 ## PHASE 1 — Full Prompt ↔ Schema Audit (Only runs if Phase 0 passes)
@@ -47,22 +48,22 @@ Before comparing anything against the Prompt, check if the JSON Schema is intern
 </audit_checklist>
 
 <fix_instruction_rules>
-If `is_aligned` is false, populate `match_with_prompt_instruction` and/or `match_with_schema_instruction` per the rules below.
+If `is_aligned` is false, populate `schema_updater_instruction` and/or `prompt_updater_instruction` per the rules below.
 
 0. **PHASE 0 SPECIAL CASE (Schema Internal Conflict):**
    - If Phase 0 failed, this is a pure internal schema repair. No Prompt vs Schema direction applies.
-   - Populate ONLY `match_with_prompt_instruction` with the schema self-fix instruction.
-   - `match_with_schema_instruction` MUST be `null`. The Prompt does not need any changes at this stage.
+   - Populate ONLY `schema_updater_instruction` with the schema self-fix instruction.
+   - `prompt_updater_instruction` MUST be `null`. The Prompt does not need any changes at this stage.
    - The instruction must clearly state: what the conflict is, which exact key is wrong, and exactly what to rename or correct in the schema (e.g., rename `"gap"` to `"gaps"` in the `required` array).
 
 1. **SCOPE ISOLATION (NON-NEGOTIABLE):**
-   - `match_with_prompt_instruction` → **Contains ONLY instructions for the Schema Updater Agent.** This field must describe ONLY what changes to make to the JSON Schema file. Do NOT include any prompt text changes here.
-   - `match_with_schema_instruction` → **Contains ONLY instructions for the Prompt Updater Agent.** This field must describe ONLY what changes to make to the System Prompt file. Do NOT include any schema changes here.
-   - If only one side needs a fix, set the other field to `null`.
+   - `schema_updater_instruction` → **Contains ONLY instructions for the Schema Updater Agent.** This field must describe ONLY what changes to make to the JSON Schema file. Do NOT include any prompt text changes here.
+   - `prompt_updater_instruction` → **Contains ONLY instructions for the Prompt Updater Agent.** This field must describe ONLY what changes to make to the System Prompt file. Do NOT include any schema changes here.
+   - **PHASE 1 REQUIREMENT:** For Phase 1 audits, you MUST ALWAYS populate BOTH fields! Never set either to `null`. The misalignment is a two-way street, and you must provide the user with both options so they can choose which file to treat as the absolute source of truth.
 
 2. **DIRECTIONAL TRUTH (ABSOLUTE RULE):**
-   - `match_with_prompt_instruction` → **PROMPT is source of truth.** Instruct the Schema Updater to bring the schema in line with what the prompt says.
-   - `match_with_schema_instruction` → **SCHEMA is source of truth.** Instruct the Prompt Updater to bring the prompt in line with what the schema defines.
+   - `schema_updater_instruction` → **PROMPT is source of truth.** Instruct the Schema Updater to bring the schema in line with what the prompt says.
+   - `prompt_updater_instruction` → **SCHEMA is source of truth.** Instruct the Prompt Updater to bring the prompt in line with what the schema defines.
 
 3. **SECTION-BY-SECTION BREAKDOWN:** Structure the instruction with a separate Markdown header for EACH affected section of the file. For example:
    - `# Changes in <rules> Section`
