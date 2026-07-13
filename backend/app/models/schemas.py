@@ -70,3 +70,5 @@ class SchemaEditsModel(BaseModel):
 class VerificationResultModel(BaseModel):
     is_aligned: bool = Field(description="True if the prompt and schema instructions do the same thing and align perfectly, False otherwise.")
     reason: str = Field(description="A brief explanation of why they are aligned or what is missing/misaligned.")
+    match_with_prompt_instruction: Optional[str] = Field(default=None, description="If is_aligned is False, provide specific instructions to the JSON Schema Updater on exactly what fields/properties to add, remove, or change so the Schema matches the Prompt's intent.")
+    match_with_schema_instruction: Optional[str] = Field(default=None, description="If is_aligned is False, provide specific instructions to the Prompt Updater on exactly what text or requirements to rewrite so the System Prompt matches the JSON Schema's structure.")

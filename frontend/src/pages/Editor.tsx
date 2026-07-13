@@ -47,7 +47,7 @@ export default function Editor() {
 
   // Output verification state
   const [isOutputVerifying, setIsOutputVerifying] = useState(false);
-  const [outputVerificationResult, setOutputVerificationResult] = useState<{ is_aligned: boolean; reason: string } | null>(null);
+  const [outputVerificationResult, setOutputVerificationResult] = useState<{ is_aligned: boolean; reason: string; match_with_prompt_instruction?: string; match_with_schema_instruction?: string } | null>(null);
 
   const handleOrchestrate = async () => {
     if (!settings.apiKey) {
@@ -147,6 +147,27 @@ export default function Editor() {
     setOutputVerificationResult(null);
   };
 
+  const handleFixAlignment = (source: 'prompt' | 'schema') => {
+    if (!outputVerificationResult) return;
+    
+    if (source === 'schema') {
+      setPromptInstruction('');
+      setRunPromptAgent(false);
+      const aiInstruction = outputVerificationResult.match_with_prompt_instruction || outputVerificationResult.reason;
+      setSchemaInstruction(aiInstruction);
+      setRunSchemaAgent(true);
+    } else {
+      setSchemaInstruction('');
+      setRunSchemaAgent(false);
+      const aiInstruction = outputVerificationResult.match_with_schema_instruction || outputVerificationResult.reason;
+      setPromptInstruction(aiInstruction);
+      setRunPromptAgent(true);
+    }
+    
+    setOutputVerificationResult(null);
+    setShowPlanModal(true);
+  };
+
   return (
     <>
       {/* ── MAIN SPLIT PANE ── */}
@@ -186,28 +207,44 @@ export default function Editor() {
         </div>
       </main>
 
-      {/* ── OUTPUT VERIFICATION BANNER ── */}
+      {/* ── OUTPUT VERIFICATION MODAL ── */}
       {outputVerificationResult && (
-        <div style={{
-          position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 200, minWidth: 440, maxWidth: 760, animation: 'slideUp 0.3s ease-out',
-        }}>
-          <div
-            className={`alert ${outputVerificationResult.is_aligned ? 'alert-success' : 'alert-danger'}`}
-            style={{ boxShadow: 'var(--shadow-lg)', borderRadius: 'var(--radius-lg)' }}
-          >
-            <div style={{ marginTop: 1, flexShrink: 0 }}>
-              {outputVerificationResult.is_aligned ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <strong>{outputVerificationResult.is_aligned ? 'Outputs Perfectly Aligned' : 'Misalignment Detected'}</strong>
-                <button
-                  onClick={() => setOutputVerificationResult(null)}
-                  style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', opacity: 0.6, fontSize: '1rem', lineHeight: 1, marginLeft: 12 }}
-                >✕</button>
+        <div className="modal-overlay">
+          <div className="modal-content glass-modal" style={{ maxWidth: 640 }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ color: outputVerificationResult.is_aligned ? 'var(--success-color)' : 'var(--danger-color)' }}>
+                  {outputVerificationResult.is_aligned ? <CheckCircle size={24} /> : <AlertCircle size={24} />}
+                </div>
+                <h2 style={{ margin: 0, color: outputVerificationResult.is_aligned ? 'inherit' : 'var(--danger-color)' }}>
+                  {outputVerificationResult.is_aligned ? 'Outputs Perfectly Aligned' : 'Misalignment Detected'}
+                </h2>
               </div>
-              <p>{outputVerificationResult.reason}</p>
+              <button className="icon-btn" onClick={() => setOutputVerificationResult(null)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ padding: '24px' }}>
+              <p style={{ fontSize: '1.05rem', lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
+                {outputVerificationResult.reason}
+              </p>
+              
+              {!outputVerificationResult.is_aligned && (
+                <div style={{ display: 'flex', gap: 12, marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border-color)' }}>
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={() => handleFixAlignment('schema')}
+                    style={{ flex: 1 }}
+                  >
+                    Fix Schema (Match to Prompt)
+                  </button>
+                  <button 
+                    className="btn btn-outline" 
+                    onClick={() => handleFixAlignment('prompt')}
+                    style={{ flex: 1 }}
+                  >
+                    Fix Prompt (Match to Schema)
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
