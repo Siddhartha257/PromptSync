@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Moon, Sun, Zap, Settings } from 'lucide-react';
 import HomePage from './pages/Home';
 import EditorPage from './pages/Editor';
@@ -83,14 +83,14 @@ function App() {
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       <SettingsProvider>
-        <BrowserRouter>
+        <HashRouter>
           <GlobalLayout>
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/editor" element={<EditorPage />} />
             </Routes>
           </GlobalLayout>
-        </BrowserRouter>
+        </HashRouter>
       </SettingsProvider>
     </ThemeContext.Provider>
   );
