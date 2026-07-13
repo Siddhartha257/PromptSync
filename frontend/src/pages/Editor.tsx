@@ -96,15 +96,17 @@ export default function Editor() {
     }
   };
 
-  const handleVerifyOutput = async () => {
+  const handleVerifyOutput = async (overridePrompt?: string, overrideSchema?: string) => {
     if (!settings.apiKey) { setIsSettingsOpen(true); return; }
     setIsOutputVerifying(true);
+    const p = overridePrompt ?? prompt;
+    const s = overrideSchema ?? schema;
     try {
       const res = await axios.post(`${API_URL}/verify_output`, {
         api_key: settings.apiKey,
         config: settings.verifier,
-        prompt,
-        json_schema: schema,
+        prompt: p,
+        json_schema: s,
       });
       setOutputVerificationResult(res.data);
       if (res.data.is_aligned) {
@@ -148,8 +150,8 @@ export default function Editor() {
     setOutputVerificationResult(null);
     if (fixAlignmentPending) {
       setFixAlignmentPending(false);
-      // Auto re-verify now that the fix has been applied
-      setTimeout(() => handleVerifyOutput(), 100);
+      // Pass newPrompt/newSchema explicitly to avoid stale closure
+      handleVerifyOutput(newPrompt, newSchema);
     }
   };
 
