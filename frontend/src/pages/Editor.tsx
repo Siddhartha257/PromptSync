@@ -229,20 +229,24 @@ export default function Editor() {
               
               {!outputVerificationResult.is_aligned && (
                 <div style={{ display: 'flex', gap: 12, marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border-color)' }}>
-                  <button 
-                    className="btn btn-primary" 
-                    onClick={() => handleFixAlignment('schema')}
-                    style={{ flex: 1 }}
-                  >
-                    Fix Schema (Match to Prompt)
-                  </button>
-                  <button 
-                    className="btn btn-outline" 
-                    onClick={() => handleFixAlignment('prompt')}
-                    style={{ flex: 1 }}
-                  >
-                    Fix Prompt (Match to Schema)
-                  </button>
+                  {outputVerificationResult.match_with_prompt_instruction && (
+                    <button 
+                      className="btn btn-primary" 
+                      onClick={() => handleFixAlignment('schema')}
+                      style={{ flex: 1 }}
+                    >
+                      Fix Schema (Match to Prompt)
+                    </button>
+                  )}
+                  {outputVerificationResult.match_with_schema_instruction && (
+                    <button 
+                      className="btn btn-outline" 
+                      onClick={() => handleFixAlignment('prompt')}
+                      style={{ flex: 1 }}
+                    >
+                      Fix Prompt (Match to Schema)
+                    </button>
+                  )}
                 </div>
               )}
             </div>
