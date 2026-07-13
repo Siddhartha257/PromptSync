@@ -267,7 +267,7 @@ export default function Editor() {
       <footer className="bottom-bar">
         <button
           className="btn btn-outline"
-          onClick={handleVerifyOutput}
+          onClick={() => handleVerifyOutput()}
           disabled={isOutputVerifying || !prompt.trim() || !schema.trim()}
           title="Verify Prompt ↔ Schema alignment"
         >
