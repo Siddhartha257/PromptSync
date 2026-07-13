@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
-import { Play, CheckCircle, AlertCircle, ArrowRight, Check, ShieldCheck, ChevronRight, ChevronDown, X } from 'lucide-react';
+import { Play, CheckCircle, AlertCircle, ArrowRight, Check, ShieldCheck, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
@@ -48,7 +48,7 @@ export default function Editor() {
 
   // Output verification state
   const [isOutputVerifying, setIsOutputVerifying] = useState(false);
-  const [outputVerificationResult, setOutputVerificationResult] = useState<{ is_aligned: boolean; reason: string; match_with_prompt_instruction?: string; match_with_schema_instruction?: string } | null>(null);
+  const [outputVerificationResult, setOutputVerificationResult] = useState<{ is_aligned: boolean; reason: string; prompt_updater_instruction?: string; schema_updater_instruction?: string } | null>(null);
   const [fixAlignmentPending, setFixAlignmentPending] = useState(false);
 
   // Trial run state

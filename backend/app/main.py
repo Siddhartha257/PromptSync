@@ -22,7 +22,7 @@ from app.models.schemas import (
 
 app = FastAPI(title="Prompter Studio API")
 
-frontend_url_env = os.getenv("FRONTEND_URL", "*")
+frontend_url_env = os.getenv("FRONTEND_URL")
 allowed_origins = [url.strip() for url in frontend_url_env.split(",")]
 
 app.add_middleware(
