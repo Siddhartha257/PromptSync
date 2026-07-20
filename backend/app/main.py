@@ -93,16 +93,15 @@ def orchestrate_update(req: OrchestrateRequest):
 @app.post("/api/apply_edits")
 async def apply_edits(req: ApplyEditsRequest):
     try:
-        def run_prompt_task():
+        async def run_prompt_task():
             if not req.prompt_instruction.strip():
                 return req.prompt
             
-            # Instantiate strictly inside the thread to isolate httpx connection pools
             local_caller = get_caller(req)
             local_prompt_updater = PromptUpdaterAgent(llm_caller=local_caller)
             
             try:
-                edits = local_prompt_updater.generate_edits(req.prompt, req.prompt_instruction)
+                edits = await local_prompt_updater.generate_edits_async(req.prompt, req.prompt_instruction)
             except Exception as e:
                 raise HTTPException(
                     status_code=422,
@@ -126,12 +125,11 @@ async def apply_edits(req: ApplyEditsRequest):
                 )
             return patch_result.updated_text
 
-        def run_schema_task():
+        async def run_schema_task():
             if not req.schema_instruction.strip():
                 return req.json_schema
             logger.info("Applying schema edits...")
             
-            # Instantiate strictly inside the thread to isolate httpx connection pools
             local_caller = get_caller(req)
             local_schema_updater = SchemaUpdaterAgent(llm_caller=local_caller)
 
@@ -147,7 +145,7 @@ async def apply_edits(req: ApplyEditsRequest):
                     raise HTTPException(status_code=422, detail=f"Your JSON Schema has a syntax error that could not be auto-repaired. Please fix it manually: {str(e)}")
             
             try:
-                patches = local_schema_updater.generate_edits(req.json_schema, req.schema_instruction)
+                patches = await local_schema_updater.generate_edits_async(req.json_schema, req.schema_instruction)
             except Exception as e:
                 raise HTTPException(
                     status_code=422,
@@ -161,11 +159,10 @@ async def apply_edits(req: ApplyEditsRequest):
                 )
             return json.dumps(patch_result.updated_schema, indent=2)
 
-        # Run safely in FastAPI's native threadpool. 
-        # return_exceptions=True prevents one task failure from silently killing the gather loop prematurely
+        # Run safely natively in asyncio, avoiding threadpool locks.
         results = await asyncio.gather(
-            run_in_threadpool(run_prompt_task),
-            run_in_threadpool(run_schema_task),
+            run_prompt_task(),
+            run_schema_task(),
             return_exceptions=True
         )
 
