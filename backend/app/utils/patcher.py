@@ -38,7 +38,7 @@ class TextPatcher:
         self,
         match_threshold: float = 0.4,
         match_distance: int = 10**9,
-        patch_margin: int = 4,
+        patch_margin: int = 32,
         delete_threshold: float = 0.5,
         debug: bool = False
     ):
@@ -50,14 +50,45 @@ class TextPatcher:
         self.debug = debug
 
     def _apply_single_edit(self, full_text: str, edit: SearchReplaceEdit) -> SingleEditResult:
-        patches = self.dmp.patch_make(edit.search, edit.replace)
+        # Normalize newlines to prevent \r\n vs \n mismatches
+        norm_full = full_text.replace('\r\n', '\n')
+        norm_search = edit.search.replace('\r\n', '\n')
+        norm_replace = edit.replace.replace('\r\n', '\n')
+
+        # 1. Fast Path: Exact Match (Highly reliable, bypasses fuzzy chunking bugs)
+        if norm_search in norm_full:
+            if self.debug:
+                logger.info("Exact match found. Bypassing fuzzy patcher.")
+            updated_text = norm_full.replace(norm_search, norm_replace, 1)
+            return SingleEditResult(
+                success=True,
+                updated_text=updated_text,
+                patch_text="[Exact Match Replace]",
+                applied_flags=[True]
+            )
+
+        # 2. Relaxed Path: Stripped Exact Match (Ignores LLM trailing/leading whitespace hallucinations)
+        stripped_search = norm_search.strip()
+        if stripped_search and stripped_search in norm_full:
+            if self.debug:
+                logger.info("Stripped exact match found. LLM hallucinated edge whitespace.")
+            updated_text = norm_full.replace(stripped_search, norm_replace.strip(), 1)
+            return SingleEditResult(
+                success=True,
+                updated_text=updated_text,
+                patch_text="[Stripped Exact Match Replace]",
+                applied_flags=[True]
+            )
+
+        # 3. Fallback: Fuzzy Patch Match using DMP
+        patches = self.dmp.patch_make(norm_search, norm_replace)
         patch_text = self.dmp.patch_toText(patches)
 
         if self.debug:
             logger.info(f"Generated Patch:\n{patch_text}")
 
-        updated_text, applied_flags = self.dmp.patch_apply(patches, full_text)
-        success = all(applied_flags)
+        updated_text, applied_flags = self.dmp.patch_apply(patches, norm_full)
+        success = all(applied_flags) and len(applied_flags) > 0
 
         if self.debug:
             logger.info(f"Applied Flags: {applied_flags} | Success: {success}")
