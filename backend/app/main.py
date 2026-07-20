@@ -2,9 +2,11 @@ import os
 import json
 import json_repair
 import logging
+import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.concurrency import run_in_threadpool
 
 logger = logging.getLogger("api")
 if not logger.handlers:
@@ -22,7 +24,7 @@ from app.models.schemas import (
 
 app = FastAPI(title="Prompter Studio API")
 
-frontend_url_env = os.getenv("FRONTEND_URL")
+frontend_url_env = os.getenv("FRONTEND_URL","*")
 allowed_origins = [url.strip() for url in frontend_url_env.split(",")]
 
 app.add_middleware(
@@ -89,21 +91,50 @@ def orchestrate_update(req: OrchestrateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/apply_edits")
-def apply_edits(req: ApplyEditsRequest):
+async def apply_edits(req: ApplyEditsRequest):
     try:
-        caller = get_caller(req)
-        prompt_updater = PromptUpdaterAgent(llm_caller=caller)
-        schema_updater = SchemaUpdaterAgent(llm_caller=caller)
-
-        new_prompt = req.prompt
-        if req.prompt_instruction.strip():
-            edits = prompt_updater.generate_edits(req.prompt, req.prompt_instruction)
+        def run_prompt_task():
+            if not req.prompt_instruction.strip():
+                return req.prompt
+            
+            # Instantiate strictly inside the thread to isolate httpx connection pools
+            local_caller = get_caller(req)
+            local_prompt_updater = PromptUpdaterAgent(llm_caller=local_caller)
+            
+            try:
+                edits = local_prompt_updater.generate_edits(req.prompt, req.prompt_instruction)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Prompt Agent failed to generate valid JSON edits. The model may have hallucinated or hit output limits. Error: {str(e)}. Try switching to a more capable model."
+                )
             patch_result = apply_llm_edits(req.prompt, edits)
-            new_prompt = patch_result.updated_text
+            if not patch_result.success:
+                failed = [
+                    f"Edit {r_idx+1}: could not locate search string '{edits[r_idx].search[:80].replace(chr(10), '↵')}...'"
+                    for r_idx, r in enumerate(patch_result.edit_results)
+                    if not r.success
+                ]
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"{len(failed)} of {len(edits)} prompt patch edit(s) failed to apply — "
+                        f"the search string was not found in the current prompt text. "
+                        f"Failed edits: {'; '.join(failed)}. "
+                        f"Try switching to a more capable generator model in Settings."
+                    )
+                )
+            return patch_result.updated_text
 
-        new_schema = req.json_schema
-        if req.schema_instruction.strip():
+        def run_schema_task():
+            if not req.schema_instruction.strip():
+                return req.json_schema
             logger.info("Applying schema edits...")
+            
+            # Instantiate strictly inside the thread to isolate httpx connection pools
+            local_caller = get_caller(req)
+            local_schema_updater = SchemaUpdaterAgent(llm_caller=local_caller)
+
             try:
                 schema_dict = json.loads(req.json_schema)
             except json.JSONDecodeError as e:
@@ -115,11 +146,35 @@ def apply_edits(req: ApplyEditsRequest):
                     logger.error(f"Auto-repair failed: {str(repair_e)}")
                     raise HTTPException(status_code=422, detail=f"Your JSON Schema has a syntax error that could not be auto-repaired. Please fix it manually: {str(e)}")
             
-            patches = schema_updater.generate_edits(req.json_schema, req.schema_instruction)
+            try:
+                patches = local_schema_updater.generate_edits(req.json_schema, req.schema_instruction)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Schema Agent failed to generate valid JSON patches. The model may have hallucinated or hit output limits. Error: {str(e)}. Try switching to a more capable model."
+                )
             patch_result = json_patch_engine.apply(schema_dict, patches)
             if not patch_result.success:
-                raise Exception(f"JSON Patch Failed: {patch_result.error}")
-            new_schema = json.dumps(patch_result.updated_schema, indent=2)
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Schema Agent failed to apply edits because it generated an invalid JSON patch operation. Error: {patch_result.error}. Please try again."
+                )
+            return json.dumps(patch_result.updated_schema, indent=2)
+
+        # Run safely in FastAPI's native threadpool. 
+        # return_exceptions=True prevents one task failure from silently killing the gather loop prematurely
+        results = await asyncio.gather(
+            run_in_threadpool(run_prompt_task),
+            run_in_threadpool(run_schema_task),
+            return_exceptions=True
+        )
+
+        # Process results and re-raise any exceptions that occurred in the threads
+        for result in results:
+            if isinstance(result, Exception):
+                raise result
+
+        new_prompt, new_schema = results
 
         return {
             "new_prompt": new_prompt,
@@ -151,20 +206,31 @@ def verify_output(req: VerifyOutputRequest):
         logger.error(f"Full document verification failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-def sanitize_schema_for_gemini(schema):
+def sanitize_schema_for_gemini(schema, is_in_properties=False):
     """Recursively removes keys that the Gemini SDK's OpenAPI 3.0 parser rejects."""
     if not isinstance(schema, dict):
         return schema
         
     sanitized = {}
     for key, value in schema.items():
-        if key in ["$schema", "$id", "additionalProperties", "default", "title"]:
+        if key in ["$schema", "$id", "additionalProperties"]:
             continue
             
+        if key in ["default", "title"]:
+            # If we are inside a 'properties' block, 'title' and 'default' are actually the names 
+            # of the user's fields, NOT schema metadata. Don't strip them!
+            if not is_in_properties:
+                continue
+            
         if isinstance(value, dict):
-            sanitized[key] = sanitize_schema_for_gemini(value)
+            # If the current key is "properties", then its children are user-defined fields
+            child_is_props = (key == "properties")
+            sanitized[key] = sanitize_schema_for_gemini(value, is_in_properties=child_is_props)
         elif isinstance(value, list):
-            sanitized[key] = [sanitize_schema_for_gemini(item) if isinstance(item, dict) else item for item in value]
+            sanitized[key] = [
+                sanitize_schema_for_gemini(item, is_in_properties=False) if isinstance(item, dict) else item 
+                for item in value
+            ]
         else:
             sanitized[key] = value
             
@@ -175,18 +241,21 @@ def trial_run(req: TrialRunRequest):
     logger.info("Received /api/trial_run request")
     try:
         caller = get_caller(req)
-        
-        # Parse user schema
-        try:
-            schema_dict = json.loads(req.json_schema)
-        except json.JSONDecodeError:
-            try:
-                schema_dict = json_repair.loads(req.json_schema)
-            except Exception as e:
-                raise HTTPException(status_code=422, detail=f"Your JSON Schema has syntax errors. Please fix them before running a trial: {str(e)}")
 
-        # Sanitize schema for Gemini OpenAPI 3.0 compatibility
-        schema_dict = sanitize_schema_for_gemini(schema_dict)
+        # Parse schema — if empty/blank, run in free-form mode (no JSON enforcement)
+        schema_dict = None
+        if req.json_schema.strip():
+            try:
+                schema_dict = json.loads(req.json_schema)
+            except json.JSONDecodeError:
+                try:
+                    schema_dict = json_repair.loads(req.json_schema)
+                    logger.info("Trial run schema auto-repaired successfully.")
+                except Exception as e:
+                    raise HTTPException(status_code=422, detail=f"Your JSON Schema has syntax errors. Please fix them before running a trial: {str(e)}")
+
+            # Sanitize schema for Gemini OpenAPI 3.0 compatibility
+            schema_dict = sanitize_schema_for_gemini(schema_dict)
 
         # Construct input
         input_text = ""
@@ -194,21 +263,41 @@ def trial_run(req: TrialRunRequest):
             input_text += f"Knowledge Base:\n{req.knowledge_base}\n\n"
         input_text += f"Query:\n{req.query}"
 
-        # Run LLM
-        result = caller.run(
-            input_text=input_text,
-            system_prompt=req.prompt,
-            json_format=schema_dict
-        )
-        
-        # Parse the result back to JSON string with indentation for display
+        if schema_dict:
+            # Schema available — enforce structured JSON output
+            logger.info("Trial run mode: structured JSON output (schema provided).")
+            try:
+                result = caller.run(
+                    input_text=input_text,
+                    system_prompt=req.prompt,
+                    json_format=schema_dict
+                )
+            except Exception as e:
+                error_msg = str(e)
+                if "has no attribute" in error_msg or "schema" in error_msg.lower() or "openapi" in error_msg.lower():
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Your JSON Schema is structurally invalid and could not be parsed by the LLM SDK. Ensure 'properties' and 'items' are objects, not strings. Internal error: {error_msg}"
+                    )
+                raise
+        else:
+            # No schema — free-form text output
+            logger.info("Trial run mode: free-form text output (no schema provided).")
+            result = caller.run_freeform(
+                input_text=input_text,
+                system_prompt=req.prompt,
+            )
+
+        # Try to pretty-print JSON; if not JSON just return raw text
         try:
             parsed_result = json.loads(result)
             formatted_result = json.dumps(parsed_result, indent=2)
-        except:
+        except Exception:
             formatted_result = result
-            
+
         return {"result": formatted_result}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Trial run failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -73,6 +73,7 @@ class TextPatcher:
         """Applies multiple search/replace edits sequentially and computes a final diff."""
         current_text = original_text
         results: List[SingleEditResult] = []
+        failed_edits: List[Tuple[int, str]] = []  # (index, search_preview)
 
         if self.debug:
             logger.info(f"Starting Text Edit Session with {len(edits)} edits.")
@@ -85,9 +86,21 @@ class TextPatcher:
             results.append(result)
 
             if not result.success:
-                logger.error(f"Text Edit {index} FAILED.")
-            
-            current_text = result.updated_text
+                search_preview = edit.search[:120].replace('\n', '↵')
+                logger.error(
+                    f"  ❌ Edit {index}/{len(edits)} FAILED — search string not found in text.\n"
+                    f"     SEARCH → '{search_preview}{'...' if len(edit.search) > 120 else ''}'"
+                )
+                failed_edits.append((index, search_preview))
+                # Do NOT apply the failed edit's corrupted output — keep current_text unchanged
+                # so subsequent edits still operate on a valid state
+            else:
+                replace_preview = edit.replace[:80].replace('\n', '↵')
+                logger.info(
+                    f"  ✅ Edit {index}/{len(edits)} applied successfully.\n"
+                    f"     REPLACE → '{replace_preview}{'...' if len(edit.replace) > 80 else ''}'"
+                )
+                current_text = result.updated_text
 
         # Compute final UI diff
         changes = self.dmp.diff_main(original_text, current_text)
@@ -99,11 +112,19 @@ class TextPatcher:
                 tag = "DELETE" if op == -1 else "INSERT" if op == 1 else "EQUAL "
                 logger.info(f"{tag:<8} {repr(text)}")
 
+        overall_success = len(failed_edits) == 0
+
+        if not overall_success:
+            failed_summary = "; ".join(
+                [f"Edit {i}: could not locate '{s[:60]}...'" for i, s in failed_edits]
+            )
+            logger.warning(f"Patch session completed with {len(failed_edits)} failed edit(s): {failed_summary}")
+
         return ApplyEditsResult(
             old_text=original_text,
             updated_text=current_text,
             changes=changes,
-            success=all(r.success for r in results),
+            success=overall_success,
             edit_results=results,
         )
 

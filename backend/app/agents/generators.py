@@ -26,11 +26,36 @@ class PromptUpdaterAgent:
             system_prompt=PROMPT_UPDATER_SYSTEM_PROMPT,
             json_format=PromptEditsModel
         )
+        return self._parse_response(response_text)
+
+    async def generate_edits_async(self, original_prompt: str, instruction: str) -> List[SearchReplaceEdit]:
+        logger.info("PromptUpdaterAgent: Generating prompt edits (async)...")
+        input_text = f"ORIGINAL PROMPT:\n{original_prompt}\n\nUPDATE INSTRUCTION:\n{instruction}"
         
+        response_text = await self.llm_caller.run_async(
+            input_text=input_text,
+            system_prompt=PROMPT_UPDATER_SYSTEM_PROMPT,
+            json_format=PromptEditsModel
+        )
+        return self._parse_response(response_text)
+
+    def _parse_response(self, response_text: str) -> List[SearchReplaceEdit]:
         try:
             data = json.loads(response_text)
             parsed = PromptEditsModel(**data)
-            return [SearchReplaceEdit(search=e.search, replace=e.replace) for e in parsed.edits]
+            edits = [SearchReplaceEdit(search=e.search, replace=e.replace) for e in parsed.edits]
+
+            logger.info(f"PromptUpdaterAgent: LLM returned {len(edits)} search/replace edit(s).")
+            for i, edit in enumerate(edits, start=1):
+                search_preview = edit.search[:120].replace('\n', '↵')
+                replace_preview = edit.replace[:120].replace('\n', '↵')
+                logger.info(
+                    f"  Edit {i}/{len(edits)}:\n"
+                    f"    SEARCH  → '{search_preview}{'...' if len(edit.search) > 120 else ''}'\n"
+                    f"    REPLACE → '{replace_preview}{'...' if len(edit.replace) > 120 else ''}'"
+                )
+
+            return edits
         except Exception as e:
             logger.error(f"Failed to parse Prompt edits: {e}")
             raise e
@@ -49,11 +74,33 @@ class SchemaUpdaterAgent:
             system_prompt=SCHEMA_UPDATER_SYSTEM_PROMPT,
             json_format=SchemaEditsModel
         )
+        return self._parse_response(response_text)
+
+    async def generate_edits_async(self, original_schema: str, instruction: str) -> List[JsonPatchEdit]:
+        logger.info("SchemaUpdaterAgent: Generating schema JSON patches (async)...")
+        input_text = f"ORIGINAL JSON SCHEMA:\n{original_schema}\n\nUPDATE INSTRUCTION:\n{instruction}"
         
+        response_text = await self.llm_caller.run_async(
+            input_text=input_text,
+            system_prompt=SCHEMA_UPDATER_SYSTEM_PROMPT,
+            json_format=SchemaEditsModel
+        )
+        return self._parse_response(response_text)
+
+    def _parse_response(self, response_text: str) -> List[JsonPatchEdit]:
         try:
             data = json.loads(response_text)
             parsed = SchemaEditsModel(**data)
-            return [JsonPatchEdit(op=e.op, path=e.path, value=e.value) for e in parsed.edits]
+            patches = [JsonPatchEdit(op=e.op, path=e.path, value=e.value) for e in parsed.edits]
+
+            logger.info(f"SchemaUpdaterAgent: LLM returned {len(patches)} JSON patch operation(s).")
+            for i, patch in enumerate(patches, start=1):
+                value_preview = str(patch.value)[:80].replace('\n', '↵') if patch.value is not None else 'N/A'
+                logger.info(
+                    f"  Patch {i}/{len(patches)}: op='{patch.op}' path='{patch.path}' value='{value_preview}'"
+                )
+
+            return patches
         except Exception as e:
             logger.error(f"Failed to parse Schema patches: {e}")
             raise e

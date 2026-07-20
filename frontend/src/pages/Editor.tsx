@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
-import { Play, CheckCircle, AlertCircle, ArrowRight, Check, ShieldCheck, X } from 'lucide-react';
+import { Play, CheckCircle, AlertCircle, ArrowRight, Check, ShieldCheck, X, Code } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { ThemeContext } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
+import { useToast } from '../context/ToastContext';
 import CustomSelect from '../components/CustomSelect';
+import ExportModal from '../components/ExportModal';
 import { API_URL } from '../services/api';
 import '../index.css';
 
@@ -16,13 +18,30 @@ export default function Editor() {
   const location = useLocation();
   const { theme } = React.useContext(ThemeContext);
   const { settings, setIsSettingsOpen } = useSettings();
+  const { showToast } = useToast();
+
+  const STORAGE_KEY = 'prompter_editor_state';
+
+  // Initialise from navigation state first, then fall back to localStorage, then empty
+  const savedState = (() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; }
+  })();
 
   const [prompt, setPrompt] = useState(
-    location.state?.initialPrompt || ''
+    location.state?.initialPrompt ?? savedState?.prompt ?? ''
   );
   const [schema, setSchema] = useState(
-    location.state?.initialSchema || ''
+    location.state?.initialSchema ?? savedState?.schema ?? ''
   );
+
+  // Persist to localStorage whenever prompt or schema changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ prompt, schema }));
+    } catch { /* storage full or unavailable — silently ignore */ }
+  }, [prompt, schema]);
+  
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const [userRequest, setUserRequest] = useState('');
 
@@ -63,7 +82,7 @@ export default function Editor() {
 
   const handleTrialRun = async () => {
     if (!settings.apiKey) { setIsSettingsOpen(true); return; }
-    if (!trialQuery.trim()) { alert('Query is required'); return; }
+    if (!trialQuery.trim()) { showToast('Query is required', 'error'); return; }
     
     setIsTrialRunning(true);
     setTrialResult('');
@@ -111,7 +130,7 @@ export default function Editor() {
       setRunSchemaAgent(res.data.run_schema_agent);
       setShowPlanModal(true);
     } catch {
-      alert('Error generating plan. Is the backend running?');
+      showToast('Error generating plan. Is the backend running?', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -129,7 +148,7 @@ export default function Editor() {
       });
       setVerificationResult(res.data);
     } catch {
-      alert('Verification failed.');
+      showToast('Verification failed.', 'error');
     } finally {
       setIsVerifying(false);
     }
@@ -149,10 +168,10 @@ export default function Editor() {
       });
       setOutputVerificationResult(res.data);
       if (res.data.is_aligned) {
-        setTimeout(() => setOutputVerificationResult(null), 8000);
+        setTimeout(() => setOutputVerificationResult(null), 5000);
       }
     } catch {
-      alert('Output verification failed.');
+      showToast('Output verification failed.', 'error');
     } finally {
       setIsOutputVerifying(false);
     }
@@ -174,8 +193,9 @@ export default function Editor() {
       setNewSchema(res.data.new_json_schema);
       setShowPlanModal(false);
       setShowDiffModal(true);
-    } catch {
-      alert('Error applying edits.');
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.detail || 'Error applying edits.';
+      showToast(errorMessage, 'error');
     } finally {
       setIsApplying(false);
     }
@@ -239,7 +259,16 @@ export default function Editor() {
           <div className="pane-divider" />
 
           <div className="pane">
-            <div className="pane-header">JSON Schema</div>
+            <div className="pane-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>JSON Schema</span>
+              <button 
+                className="btn btn-outline" 
+                style={{ padding: '4px 8px', fontSize: '0.75rem', gap: 6, borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}
+                onClick={() => setShowExportModal(true)}
+              >
+                <Code size={12} /> Export Code
+              </button>
+            </div>
             <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none' }}>
               <CodeMirror
                 value={schema}
@@ -347,65 +376,77 @@ export default function Editor() {
       {/* ── PLAN REVIEW MODAL ── */}
       {showPlanModal && (
         <div className="modal-overlay">
-          <div className="modal-content glass-modal">
-            <div className="modal-header">
+          <div className="modal-content glass-modal" style={{ maxWidth: '90%', width: '1400px', height: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+            {/* ── HEADER ── */}
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '22px' }}>
               <div>
                 <h2>Orchestrator Plan</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 3 }}>
-                  Review and tweak agent instructions before applying.
+                  Review and tweak the generated agent instructions before applying.
                 </p>
               </div>
               <button className="btn btn-outline" onClick={() => setShowPlanModal(false)}>Cancel</button>
             </div>
 
-            <div className="modal-body">
-              {/* Prompt instruction */}
-              <div className="instruction-group">
-                <div>
-                  <label>Prompt Agent Instructions</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontWeight: 500, color: 'var(--text-secondary)', fontSize: '0.82rem', textTransform: 'none', letterSpacing: 0 }}>
-                    <input type="checkbox" checked={runPromptAgent} onChange={e => setRunPromptAgent(e.target.checked)} />
-                    Run agent
-                  </label>
-                </div>
-                <div style={{ flex: 1, overflow: 'auto', display: 'flex', minHeight: 180, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', opacity: runPromptAgent ? 1 : 0.4 }}>
-                  <CodeMirror
-                    value={promptInstruction}
-                    height="100%"
-                    extensions={[markdown()]}
-                    onChange={(value) => setPromptInstruction(value)}
-                    theme={theme === 'dark' ? 'dark' : 'light'}
-                    editable={runPromptAgent}
-                    style={{ flex: 1, fontSize: '0.82rem' }}
-                  />
-                </div>
-              </div>
+            {/* ── SPLIT PANE BODY ── */}
+            <div className="modal-body" style={{ padding: 0, overflow: 'hidden', flex: 1, display: 'flex' }}>
+              <div className="split-pane" style={{ flex: 1, minHeight: 0 }}>
 
-              {/* Schema instruction */}
-              <div className="instruction-group">
-                <div>
-                  <label>Schema Agent Instructions</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontWeight: 500, color: 'var(--text-secondary)', fontSize: '0.82rem', textTransform: 'none', letterSpacing: 0 }}>
-                    <input type="checkbox" checked={runSchemaAgent} onChange={e => setRunSchemaAgent(e.target.checked)} />
-                    Run agent
-                  </label>
+                {/* ── LEFT: Prompt Agent ── */}
+                <div className="pane">
+                  <div className="pane-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Prompt Agent Instructions</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontWeight: 500, color: 'var(--text-secondary)', fontSize: '0.82rem', textTransform: 'none', letterSpacing: 0 }}>
+                      <input type="checkbox" checked={runPromptAgent} onChange={e => setRunPromptAgent(e.target.checked)} />
+                      Run agent
+                    </label>
+                  </div>
+                  <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none', padding: 0, opacity: runPromptAgent ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+                    <CodeMirror
+                      value={promptInstruction}
+                      height="100%"
+                      extensions={[markdown()]}
+                      onChange={(value) => setPromptInstruction(value)}
+                      theme={theme === 'dark' ? 'dark' : 'light'}
+                      editable={runPromptAgent}
+                      style={{ flex: 1, fontSize: '0.82rem' }}
+                    />
+                  </div>
                 </div>
-                <div style={{ flex: 1, overflow: 'auto', display: 'flex', minHeight: 180, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', opacity: runSchemaAgent ? 1 : 0.4 }}>
-                  <CodeMirror
-                    value={schemaInstruction}
-                    height="100%"
-                    extensions={[markdown()]}
-                    onChange={(value) => setSchemaInstruction(value)}
-                    theme={theme === 'dark' ? 'dark' : 'light'}
-                    editable={runSchemaAgent}
-                    style={{ flex: 1, fontSize: '0.82rem' }}
-                  />
-                </div>
-              </div>
 
+                <div className="pane-divider" />
+
+                {/* ── RIGHT: Schema Agent ── */}
+                <div className="pane">
+                  <div className="pane-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Schema Agent Instructions</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontWeight: 500, color: 'var(--text-secondary)', fontSize: '0.82rem', textTransform: 'none', letterSpacing: 0 }}>
+                      <input type="checkbox" checked={runSchemaAgent} onChange={e => setRunSchemaAgent(e.target.checked)} />
+                      Run agent
+                    </label>
+                  </div>
+                  <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none', padding: 0, opacity: runSchemaAgent ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+                    <CodeMirror
+                      value={schemaInstruction}
+                      height="100%"
+                      extensions={[markdown()]}
+                      onChange={(value) => setSchemaInstruction(value)}
+                      theme={theme === 'dark' ? 'dark' : 'light'}
+                      editable={runSchemaAgent}
+                      style={{ flex: 1, fontSize: '0.82rem' }}
+                    />
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* ── FOOTER ── */}
+            <div className="modal-footer" style={{ flexDirection: 'column', gap: 12, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
               {/* Verification result */}
               {verificationResult && (
-                <div className={`alert ${verificationResult.is_aligned ? 'alert-success' : 'alert-danger'}`}>
+                <div className={`alert ${verificationResult.is_aligned ? 'alert-success' : 'alert-danger'}`} style={{ margin: 0 }}>
                   <div style={{ flexShrink: 0, marginTop: 1 }}>
                     {verificationResult.is_aligned ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
                   </div>
@@ -415,21 +456,22 @@ export default function Editor() {
                   </div>
                 </div>
               )}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button className="btn btn-outline" onClick={handleVerify} disabled={isVerifying}>
+                  {isVerifying ? <div className="loader" style={{ width: 15, height: 15, borderWidth: 2 }} /> : <CheckCircle size={15} />}
+                  Verify Instructions
+                </button>
+                <button className="btn btn-primary" onClick={handleApply} disabled={isApplying}>
+                  {isApplying ? <div className="loader" style={{ borderTopColor: '#fff', width: 15, height: 15 }} /> : <ArrowRight size={15} />}
+                  Apply & Preview Diff
+                </button>
+              </div>
             </div>
 
-            <div className="modal-footer">
-              <button className="btn btn-outline" onClick={handleVerify} disabled={isVerifying}>
-                {isVerifying ? <div className="loader" style={{ width: 15, height: 15, borderWidth: 2 }} /> : <CheckCircle size={15} />}
-                Verify Instructions
-              </button>
-              <button className="btn btn-primary" onClick={handleApply} disabled={isApplying}>
-                {isApplying ? <div className="loader" style={{ borderTopColor: '#fff', width: 15, height: 15 }} /> : <ArrowRight size={15} />}
-                Apply & Preview Diff
-              </button>
-            </div>
           </div>
         </div>
       )}
+
 
       {/* ── DIFF REVIEW MODAL ── */}
       {showDiffModal && (
@@ -648,6 +690,14 @@ export default function Editor() {
           </div>
         </div>
       )}
+
+      {/* ── EXPORT MODAL ── */}
+      <ExportModal 
+        isOpen={showExportModal} 
+        onClose={() => setShowExportModal(false)} 
+        schemaStr={schema} 
+        theme={theme} 
+      />
     </>
   );
 }

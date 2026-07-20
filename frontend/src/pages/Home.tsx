@@ -3,11 +3,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
   Bot, Wand2, Edit3, ArrowRight, Play, CheckCircle,
-  GitBranch, Layers, ShieldCheck, Cpu, Zap
+  GitBranch, Layers, ShieldCheck, Cpu, Zap, AlertCircle
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { API_URL } from '../services/api';
 import { ThemeContext } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { json } from '@codemirror/lang-json';
@@ -18,6 +19,7 @@ export default function Home() {
   const location = useLocation();
   const { settings, setIsSettingsOpen } = useSettings();
   const { theme } = useContext(ThemeContext);
+  const { showToast } = useToast();
 
   const [mode, setMode] = useState<'select' | 'scratch'>('select');
   const [userRequest, setUserRequest] = useState('');
@@ -30,6 +32,10 @@ export default function Home() {
   const [schemaInstruction, setSchemaInstruction] = useState('');
   const [runPromptAgent, setRunPromptAgent] = useState(true);
   const [runSchemaAgent, setRunSchemaAgent] = useState(true);
+
+  // Verification state
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<{ is_aligned: boolean; reason: string } | null>(null);
 
   // Stream state
   const [isStreaming, setIsStreaming] = useState(false);
@@ -85,11 +91,33 @@ export default function Home() {
       setSchemaInstruction(res.data.json_schema_instruction);
       setRunPromptAgent(res.data.run_prompt_agent);
       setRunSchemaAgent(res.data.run_schema_agent);
+      setVerificationResult(null);
       setShowPlanModal(true);
     } catch {
-      alert('Error generating plan. Is the backend running?');
+      showToast('Error generating plan. Is the backend running?', 'error');
     } finally {
       setIsPlanning(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!settings.apiKey) { setIsSettingsOpen(true); return; }
+    setIsVerifying(true);
+    try {
+      const res = await axios.post(`${API_URL}/verify`, {
+        api_key: settings.apiKey,
+        config: settings.verifier,
+        prompt_instruction: promptInstruction,
+        schema_instruction: schemaInstruction,
+      });
+      setVerificationResult(res.data);
+      if (res.data.is_aligned) {
+        setTimeout(() => setVerificationResult(null), 5000);
+      }
+    } catch {
+      showToast('Verification failed. Check backend logs.', 'error');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -102,18 +130,29 @@ export default function Home() {
     if (!res.body) throw new Error('No body');
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = '';
+
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      for (const line of chunk.split('\n\n')) {
-        if (!line.startsWith('data: ')) continue;
-        const dataStr = line.slice(6);
-        if (dataStr === '[DONE]') break;
-        try {
-          const parsed = JSON.parse(dataStr);
-          if (parsed.text) onChunk(parsed.text);
-        } catch { /* partial chunk */ }
+      
+      buffer += decoder.decode(value, { stream: true });
+      
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf('\n\n')) >= 0) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 2);
+        
+        if (line.startsWith('data: ')) {
+          const dataStr = line.slice(6);
+          if (dataStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(dataStr);
+            if (parsed.text) onChunk(parsed.text);
+          } catch {
+            // Unparsable chunk even after \n\n
+          }
+        }
       }
     }
   };
@@ -129,8 +168,13 @@ export default function Home() {
       promises.push(streamFromEndpoint('stream/prompt', { api_key: settings.apiKey, config: settings.generators, instruction: promptInstruction, target_model: targetModel }, chunk => setGeneratedPrompt(p => p + chunk)));
     if (runSchemaAgent)
       promises.push(streamFromEndpoint('stream/schema', { api_key: settings.apiKey, config: settings.generators, instruction: schemaInstruction }, chunk => setGeneratedSchema(p => p + chunk)));
-    try { await Promise.all(promises); } catch { alert('Streaming failed.'); }
-    finally { setIsStreaming(false); }
+    try { 
+      await Promise.all(promises); 
+    } catch { 
+      showToast('Streaming failed.', 'error');
+    } finally { 
+      setIsStreaming(false); 
+    }
   };
 
   const handleContinue = () => {
@@ -381,7 +425,7 @@ export default function Home() {
           </div>
 
           {/* Split pane */}
-          <div className="split-pane" style={{ flex: 1 }}>
+          <div className="split-pane" style={{ flex: 1, minHeight: 0 }}>
             <div className="pane">
               <div className="pane-header">Prompt Generation Stream</div>
               <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none' }}>
@@ -420,8 +464,10 @@ export default function Home() {
       {/* ── PLAN REVIEW MODAL ── */}
       {showPlanModal && (
         <div className="modal-overlay" style={{ position: 'fixed' }}>
-          <div className="modal-content glass-modal">
-            <div className="modal-header">
+          <div className="modal-content glass-modal" style={{ maxWidth: '90%', width: '1400px', height: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+            {/* ── HEADER ── */}
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '22px' }}>
               <div>
                 <h2>Orchestrator Plan</h2>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 3 }}>
@@ -431,58 +477,85 @@ export default function Home() {
               <button className="btn btn-outline" onClick={() => setShowPlanModal(false)}>Cancel</button>
             </div>
 
-            <div className="modal-body">
-              <div className="instruction-group">
-                <div>
-                  <label>Prompt Agent Instructions</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 500, color: 'var(--text-secondary)', fontSize: '0.82rem', textTransform: 'none', letterSpacing: 0 }}>
-                    <input type="checkbox" checked={runPromptAgent} onChange={e => setRunPromptAgent(e.target.checked)} />
-                    Execute
-                  </label>
-                </div>
-                <div style={{ flex: 1, overflow: 'auto', display: 'flex', minHeight: 200, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', opacity: runPromptAgent ? 1 : 0.4 }}>
-                  <CodeMirror
-                    value={promptInstruction}
-                    height="100%"
-                    extensions={[markdown()]}
-                    onChange={(value) => setPromptInstruction(value)}
-                    theme={theme === 'dark' ? 'dark' : 'light'}
-                    editable={runPromptAgent}
-                    style={{ flex: 1, fontSize: '0.82rem' }}
-                  />
-                </div>
-              </div>
+            {/* ── SPLIT PANE BODY ── */}
+            <div className="modal-body" style={{ padding: 0, overflow: 'hidden', flex: 1, display: 'flex' }}>
+              <div className="split-pane" style={{ flex: 1, minHeight: 0 }}>
 
-              <div className="instruction-group">
-                <div>
-                  <label>Schema Agent Instructions</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 500, color: 'var(--text-secondary)', fontSize: '0.82rem', textTransform: 'none', letterSpacing: 0 }}>
-                    <input type="checkbox" checked={runSchemaAgent} onChange={e => setRunSchemaAgent(e.target.checked)} />
-                    Execute
-                  </label>
+                {/* ── LEFT: Prompt Agent ── */}
+                <div className="pane">
+                  <div className="pane-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Prompt Agent Instructions</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 500, color: 'var(--text-secondary)', fontSize: '0.82rem', textTransform: 'none', letterSpacing: 0 }}>
+                      <input type="checkbox" checked={runPromptAgent} onChange={e => setRunPromptAgent(e.target.checked)} />
+                      Execute
+                    </label>
+                  </div>
+                  <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none', padding: 0, opacity: runPromptAgent ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+                    <CodeMirror
+                      value={promptInstruction}
+                      height="100%"
+                      extensions={[markdown()]}
+                      onChange={(value) => setPromptInstruction(value)}
+                      theme={theme === 'dark' ? 'dark' : 'light'}
+                      editable={runPromptAgent}
+                      style={{ flex: 1, fontSize: '0.82rem' }}
+                    />
+                  </div>
                 </div>
-                <div style={{ flex: 1, overflow: 'auto', display: 'flex', minHeight: 200, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', opacity: runSchemaAgent ? 1 : 0.4 }}>
-                  <CodeMirror
-                    value={schemaInstruction}
-                    height="100%"
-                    extensions={[markdown()]}
-                    onChange={(value) => setSchemaInstruction(value)}
-                    theme={theme === 'dark' ? 'dark' : 'light'}
-                    editable={runSchemaAgent}
-                    style={{ flex: 1, fontSize: '0.82rem' }}
-                  />
+
+                <div className="pane-divider" />
+
+                {/* ── RIGHT: Schema Agent ── */}
+                <div className="pane">
+                  <div className="pane-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Schema Agent Instructions</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 500, color: 'var(--text-secondary)', fontSize: '0.82rem', textTransform: 'none', letterSpacing: 0 }}>
+                      <input type="checkbox" checked={runSchemaAgent} onChange={e => setRunSchemaAgent(e.target.checked)} />
+                      Execute
+                    </label>
+                  </div>
+                  <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none', padding: 0, opacity: runSchemaAgent ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+                    <CodeMirror
+                      value={schemaInstruction}
+                      height="100%"
+                      extensions={[markdown()]}
+                      onChange={(value) => setSchemaInstruction(value)}
+                      theme={theme === 'dark' ? 'dark' : 'light'}
+                      editable={runSchemaAgent}
+                      style={{ flex: 1, fontSize: '0.82rem' }}
+                    />
+                  </div>
                 </div>
+
               </div>
             </div>
 
-            <div className="modal-footer">
-              <button className="btn btn-primary" onClick={handleExecuteStreams}>
-                <ArrowRight size={15} /> Execute Build
-              </button>
+            {/* ── FOOTER ── */}
+            <div className="modal-footer" style={{ flexDirection: 'column', gap: 12, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
+              {verificationResult && (
+                <div className={`alert ${verificationResult.is_aligned ? 'alert-success' : 'alert-danger'}`} style={{ margin: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    {verificationResult.is_aligned ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+                    <strong>{verificationResult.is_aligned ? 'Instructions Aligned' : 'Misalignment Detected'}</strong>
+                  </div>
+                  <div style={{ fontSize: '0.85rem' }}>{verificationResult.reason}</div>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, width: '100%' }}>
+                <button className="btn btn-outline" onClick={handleVerify} disabled={isVerifying}>
+                  {isVerifying ? <div className="loader" style={{ width: 15, height: 15, borderWidth: 2 }} /> : <ShieldCheck size={15} />}
+                  Verify Instructions
+                </button>
+                <button className="btn btn-primary" onClick={handleExecuteStreams}>
+                  <ArrowRight size={15} /> Execute Build
+                </button>
+              </div>
             </div>
+
           </div>
         </div>
       )}
+
     </div>
   );
 }

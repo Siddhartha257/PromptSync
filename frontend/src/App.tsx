@@ -5,6 +5,7 @@ import HomePage from './pages/Home';
 import EditorPage from './pages/Editor';
 import { ThemeContext } from './context/ThemeContext';
 import { SettingsProvider, useSettings } from './context/SettingsContext';
+import { ToastProvider } from './context/ToastContext';
 import SettingsModal from './components/SettingsModal';
 import './index.css';
 
@@ -82,16 +83,18 @@ function App() {
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      <SettingsProvider>
-        <HashRouter>
-          <GlobalLayout>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/editor" element={<EditorPage />} />
-            </Routes>
-          </GlobalLayout>
-        </HashRouter>
-      </SettingsProvider>
+      <ToastProvider>
+        <SettingsProvider>
+          <HashRouter>
+            <GlobalLayout>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/editor" element={<EditorPage />} />
+              </Routes>
+            </GlobalLayout>
+          </HashRouter>
+        </SettingsProvider>
+      </ToastProvider>
     </ThemeContext.Provider>
   );
 }

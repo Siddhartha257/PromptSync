@@ -1,5 +1,6 @@
 import logging
 import time
+import asyncio
 from typing import Type, Optional
 from pydantic import BaseModel
 from google import genai
@@ -67,6 +68,67 @@ class LLMCaller:
                 if attempt < self.max_retries:
                     logger.info(f"Retrying in {self.retry_delay} seconds...")
                     time.sleep(self.retry_delay)
+                else:
+                    raise
+
+    def run_freeform(self, input_text: str, system_prompt: str) -> str:
+        """Run the LLM without any response schema enforcement — returns raw text."""
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                logger.info(f"Calling LLM freeform ({self.model_name}) - Attempt {attempt}/{self.max_retries}")
+
+                config = types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=self.temperature
+                )
+
+                thinking = self._get_thinking_config()
+                if thinking:
+                    config.thinking_config = thinking
+
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=input_text,
+                    config=config
+                )
+                logger.info("LLM freeform call successful.")
+                return response.text
+            except Exception as e:
+                logger.error(f"LLM freeform call failed on attempt {attempt}: {e}")
+                if attempt < self.max_retries:
+                    logger.info(f"Retrying in {self.retry_delay} seconds...")
+                    time.sleep(self.retry_delay)
+                else:
+                    raise
+
+    async def run_async(self, input_text: str, system_prompt: str, json_format: Type[BaseModel] | dict) -> str:
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                logger.info(f"Calling LLM async ({self.model_name}) - Attempt {attempt}/{self.max_retries}")
+                
+                config = types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json",
+                    response_schema=json_format,
+                    temperature=self.temperature
+                )
+                
+                thinking = self._get_thinking_config()
+                if thinking:
+                    config.thinking_config = thinking
+
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=input_text,
+                    config=config
+                )
+                logger.info("LLM async call successful.")
+                return response.text
+            except Exception as e:
+                logger.error(f"LLM async call failed on attempt {attempt}: {e}")
+                if attempt < self.max_retries:
+                    logger.info(f"Retrying async in {self.retry_delay} seconds...")
+                    await asyncio.sleep(self.retry_delay)
                 else:
                     raise
 
