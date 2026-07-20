@@ -159,23 +159,16 @@ async def apply_edits(req: ApplyEditsRequest):
                 )
             return json.dumps(patch_result.updated_schema, indent=2)
 
-        # Run safely natively in asyncio, avoiding threadpool locks.
-        results = await asyncio.gather(
-            run_prompt_task(),
-            run_schema_task(),
-            return_exceptions=True
-        )
-
-        # Process results and re-raise any exceptions that occurred in the threads
-        for result in results:
-            if isinstance(result, Exception):
-                raise result
-
-        new_prompt, new_schema = results
+        # Run safely natively in asyncio.
+        # We run these sequentially instead of using asyncio.gather because running 
+        # concurrent outbound LLM calls on PaaS providers (like Render) can trigger 
+        # silent HTTP/2 multiplexing dropouts or free-tier rate limits, causing one task to hang indefinitely.
+        prompt_result = await run_prompt_task()
+        schema_result = await run_schema_task()
 
         return {
-            "new_prompt": new_prompt,
-            "new_json_schema": new_schema
+            "new_prompt": prompt_result,
+            "new_json_schema": schema_result
         }
     except HTTPException:
         raise
