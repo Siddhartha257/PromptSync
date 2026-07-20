@@ -159,12 +159,20 @@ async def apply_edits(req: ApplyEditsRequest):
                 )
             return json.dumps(patch_result.updated_schema, indent=2)
 
-        # Run safely natively in asyncio.
-        # We run these sequentially instead of using asyncio.gather because running 
-        # concurrent outbound LLM calls on PaaS providers (like Render) can trigger 
-        # silent HTTP/2 multiplexing dropouts or free-tier rate limits, causing one task to hang indefinitely.
-        prompt_result = await run_prompt_task()
-        schema_result = await run_schema_task()
+        # Run concurrently using asyncio.gather to prevent exceeding Render's 100s timeout.
+        # Since these are now fully async, they won't deadlock httpx like the threadpool did!
+        results = await asyncio.gather(
+            run_prompt_task(),
+            run_schema_task(),
+            return_exceptions=True
+        )
+
+        # Process results and re-raise any exceptions that occurred in the tasks
+        for result in results:
+            if isinstance(result, Exception):
+                raise result
+
+        prompt_result, schema_result = results
 
         return {
             "new_prompt": prompt_result,
