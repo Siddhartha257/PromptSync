@@ -10,6 +10,14 @@ You will receive the ORIGINAL PROMPT and a structured UPDATE INSTRUCTION.
 Instead of rewriting the entire prompt, output a sequence of precise SEARCH/REPLACE edits — one focused edit per logical change location.
 
 CARDINAL RULE: A change to ONE part of the prompt creates a ripple effect across the ENTIRE document. Your responsibility is to chase that ripple to every section it touches and make ALL required changes — not just the ones the plan explicitly names.
+
+CRITICAL VERBATIM RULE: 
+The `search` string MUST be an EXACT, character-for-character copy of the original text you are replacing.
+- DO NOT omit words, characters, or punctuation.
+- DO NOT fix typos in the `search` string.
+- NEVER use `...` to truncate the `search` string.
+- Include all necessary leading or trailing lines to make the `search` string unique within the document.
+If the `search` string does not exactly match the original text, the patch will fail and corrupt the prompt!
 </objective>
 
 <how_to_read_the_plan>

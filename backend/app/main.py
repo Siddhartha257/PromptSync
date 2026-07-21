@@ -167,16 +167,35 @@ async def apply_edits(req: ApplyEditsRequest):
             return_exceptions=True
         )
 
-        # Process results and re-raise any exceptions that occurred in the tasks
-        for result in results:
-            if isinstance(result, Exception):
-                raise result
-
+        # Process results and handle partial success
+        errors = {"prompt": None, "schema": None}
         prompt_result, schema_result = results
+
+        if isinstance(prompt_result, Exception):
+            if isinstance(prompt_result, HTTPException):
+                errors["prompt"] = prompt_result.detail
+            else:
+                errors["prompt"] = str(prompt_result)
+            prompt_result = req.prompt  # Fallback to original
+            
+        if isinstance(schema_result, Exception):
+            if isinstance(schema_result, HTTPException):
+                errors["schema"] = schema_result.detail
+            else:
+                errors["schema"] = str(schema_result)
+            schema_result = req.json_schema  # Fallback to original
+
+        # If both failed, we still want to throw a 422 to halt everything
+        if isinstance(results[0], Exception) and isinstance(results[1], Exception):
+            raise HTTPException(
+                status_code=422, 
+                detail=f"Both updates failed.\nPrompt Error: {errors['prompt']}\nSchema Error: {errors['schema']}"
+            )
 
         return {
             "new_prompt": prompt_result,
-            "new_json_schema": schema_result
+            "new_json_schema": schema_result,
+            "errors": errors
         }
     except HTTPException:
         raise

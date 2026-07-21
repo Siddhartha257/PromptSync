@@ -15,13 +15,14 @@ if not logger.handlers:
     )
 
 class LLMCaller:
-    def __init__(self, api_key: str, model_name: str = "gemini-3.1-flash-lite", thinking_level: str = "Low", temperature: float = 0.7, max_retries: int = 3, retry_delay: float = 2.0):
+    def __init__(self, api_key: str, model_name: str = "gemini-3.1-flash-lite", thinking_level: str = "Low", temperature: float = 0.7, max_retries: int = 3, retry_delay: float = 2.0, fallback_model: str = "gemini-3.1-flash-lite"):
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
         self.thinking_level = thinking_level
         self.temperature = temperature
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self.fallback_model = fallback_model
 
     def _get_thinking_config(self) -> Optional[types.ThinkingConfig]:
         if self.thinking_level == "None":
@@ -64,7 +65,16 @@ class LLMCaller:
                 logger.info("LLM call successful.")
                 return response.text
             except Exception as e:
-                logger.error(f"LLM call failed on attempt {attempt}: {e}")
+                err_str = str(e)
+                logger.error(f"LLM call failed on attempt {attempt}: {err_str}")
+                
+                # Fail-fast on 429 Quota/Rate Limit or 503 Overloaded and switch to fallback
+                if "429" in err_str or "503" in err_str:
+                    if self.model_name != self.fallback_model:
+                        logger.warning(f"Model overloaded. Falling back instantly from {self.model_name} to {self.fallback_model}")
+                        self.model_name = self.fallback_model
+                        continue # Retry immediately with fallback model
+                
                 if attempt < self.max_retries:
                     logger.info(f"Retrying in {self.retry_delay} seconds...")
                     time.sleep(self.retry_delay)
@@ -94,7 +104,15 @@ class LLMCaller:
                 logger.info("LLM freeform call successful.")
                 return response.text
             except Exception as e:
-                logger.error(f"LLM freeform call failed on attempt {attempt}: {e}")
+                err_str = str(e)
+                logger.error(f"LLM freeform call failed on attempt {attempt}: {err_str}")
+                
+                if "429" in err_str or "503" in err_str:
+                    if self.model_name != self.fallback_model:
+                        logger.warning(f"Model overloaded. Falling back instantly from {self.model_name} to {self.fallback_model}")
+                        self.model_name = self.fallback_model
+                        continue
+                
                 if attempt < self.max_retries:
                     logger.info(f"Retrying in {self.retry_delay} seconds...")
                     time.sleep(self.retry_delay)
@@ -125,7 +143,15 @@ class LLMCaller:
                 logger.info("LLM async call successful.")
                 return response.text
             except Exception as e:
-                logger.error(f"LLM async call failed on attempt {attempt}: {e}")
+                err_str = str(e)
+                logger.error(f"LLM async call failed on attempt {attempt}: {err_str}")
+                
+                if "429" in err_str or "503" in err_str:
+                    if self.model_name != self.fallback_model:
+                        logger.warning(f"Model overloaded. Falling back instantly from {self.model_name} to {self.fallback_model}")
+                        self.model_name = self.fallback_model
+                        continue
+                
                 if attempt < self.max_retries:
                     logger.info(f"Retrying async in {self.retry_delay} seconds...")
                     await asyncio.sleep(self.retry_delay)

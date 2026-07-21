@@ -191,6 +191,14 @@ export default function Editor() {
       });
       setNewPrompt(res.data.new_prompt);
       setNewSchema(res.data.new_json_schema);
+      
+      if (res.data.errors && (res.data.errors.prompt || res.data.errors.schema)) {
+        let msg = 'Partial success! ';
+        if (res.data.errors.prompt) msg += `Prompt Agent failed: ${res.data.errors.prompt} `;
+        if (res.data.errors.schema) msg += `Schema Agent failed: ${res.data.errors.schema}`;
+        showToast(msg, 'error');
+      }
+
       setShowPlanModal(false);
       setShowDiffModal(true);
     } catch (err: any) {

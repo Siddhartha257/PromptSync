@@ -147,7 +147,7 @@ body {
   justify-content: space-between;
   padding: 0 28px;
   position: relative;
-  z-index: 20;
+  z-index: 105;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-glass);
   backdrop-filter: blur(20px);

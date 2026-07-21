@@ -80,7 +80,53 @@ class TextPatcher:
                 applied_flags=[True]
             )
 
-        # 3. Fallback: Fuzzy Patch Match using DMP
+        # 3. Line-by-Line Fuzzy Match (Ignores all indentation and intermediate blank lines)
+        search_lines = [line.strip() for line in norm_search.splitlines() if line.strip()]
+        full_lines = norm_full.splitlines()
+        
+        if search_lines:
+            match_start_idx = -1
+            match_end_idx = -1
+            
+            for i in range(len(full_lines)):
+                if full_lines[i].strip() == search_lines[0]:
+                    current_search_idx = 0
+                    current_full_idx = i
+                    
+                    while current_search_idx < len(search_lines) and current_full_idx < len(full_lines):
+                        if full_lines[current_full_idx].strip() == search_lines[current_search_idx]:
+                            current_search_idx += 1
+                        elif full_lines[current_full_idx].strip() == "":
+                            # Ignore empty lines in full text during matching
+                            pass
+                        else:
+                            break
+                        current_full_idx += 1
+                        
+                    if current_search_idx == len(search_lines):
+                        match_start_idx = i
+                        match_end_idx = current_full_idx
+                        break
+                        
+            if match_start_idx != -1:
+                if self.debug:
+                    logger.info("Line-by-line fuzzy match found. Bypassing DMP.")
+                
+                before_text = "\n".join(full_lines[:match_start_idx])
+                after_text = "\n".join(full_lines[match_end_idx:])
+                
+                if before_text and not before_text.endswith("\n"): before_text += "\n"
+                if after_text and not after_text.startswith("\n"): after_text = "\n" + after_text
+                
+                updated_text = before_text + norm_replace + after_text
+                return SingleEditResult(
+                    success=True,
+                    updated_text=updated_text,
+                    patch_text="[Line-by-Line Fuzzy Replace]",
+                    applied_flags=[True]
+                )
+
+        # 4. Fallback: Fuzzy Patch Match using DMP
         patches = self.dmp.patch_make(norm_search, norm_replace)
         patch_text = self.dmp.patch_toText(patches)
 
@@ -112,25 +158,16 @@ class TextPatcher:
         for index, edit in enumerate(edits, start=1):
             if self.debug:
                 logger.info(f"--- Applying Edit {index}/{len(edits)} ---")
-            
+                
             result = self._apply_single_edit(current_text, edit)
             results.append(result)
 
             if not result.success:
                 search_preview = edit.search[:120].replace('\n', '↵')
-                logger.error(
-                    f"  ❌ Edit {index}/{len(edits)} FAILED — search string not found in text.\n"
-                    f"     SEARCH → '{search_preview}{'...' if len(edit.search) > 120 else ''}'"
-                )
+                logger.warning(f"  ❌ Edit {index}/{len(edits)} failed. Search string not found in original.")
                 failed_edits.append((index, search_preview))
-                # Do NOT apply the failed edit's corrupted output — keep current_text unchanged
-                # so subsequent edits still operate on a valid state
             else:
-                replace_preview = edit.replace[:80].replace('\n', '↵')
-                logger.info(
-                    f"  ✅ Edit {index}/{len(edits)} applied successfully.\n"
-                    f"     REPLACE → '{replace_preview}{'...' if len(edit.replace) > 80 else ''}'"
-                )
+                logger.info(f"  ✅ Edit {index}/{len(edits)} applied successfully using {result.patch_text}")
                 current_text = result.updated_text
 
         # Compute final UI diff
