@@ -5,7 +5,9 @@ import { X, Key, Cpu, BrainCircuit, ShieldCheck, CheckCircle2 } from 'lucide-rea
 import '../index.css';
 
 const MODELS = [
+  'gemini-3.6-flash',
   'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
   'gemini-3.1-pro',
   'gemini-3.1-flash',
   'gemini-3.1-flash-lite',
@@ -16,7 +18,7 @@ const MODELS = [
   'gemma-4-26b-a4b-it',
 ];
 
-const THINKING_LEVELS = ['None', 'Low', 'Medium', 'High'];
+const THINKING_LEVELS = ['None', 'Minimal', 'Low', 'Medium', 'High'];
 
 export default function SettingsModal() {
   const { settings, updateSettings, isSettingsOpen, setIsSettingsOpen } = useSettings();

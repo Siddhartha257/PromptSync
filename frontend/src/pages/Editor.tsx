@@ -99,7 +99,7 @@ export default function Editor() {
         json_schema: schema,
         knowledge_base: trialKb,
         query: trialQuery
-      });
+      }, { timeout: 180000 });
       setTrialResult(res.data.result);
     } catch (err: any) {
       setTrialResult(err.response?.data?.detail || err.message);
@@ -188,7 +188,7 @@ export default function Editor() {
         json_schema: schema,
         prompt_instruction: runPromptAgent ? promptInstruction : '',
         schema_instruction: runSchemaAgent ? schemaInstruction : '',
-      });
+      }, { timeout: 180000 });
       setNewPrompt(res.data.new_prompt);
       setNewSchema(res.data.new_json_schema);
       
@@ -588,7 +588,9 @@ export default function Editor() {
                   value={trialModel} 
                   onChange={setTrialModel}
                   options={[
+                    { value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
                     { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+                    { value: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite' },
                     { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
                     { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash' },
                     { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite' },
@@ -608,10 +610,11 @@ export default function Editor() {
                   value={trialThinking} 
                   onChange={setTrialThinking}
                   options={[
+                    { value: 'None', label: 'None' },
+                    { value: 'Minimal', label: 'Minimal' },
                     { value: 'Low', label: 'Low (1k)' },
                     { value: 'Medium', label: 'Medium (4k)' },
-                    { value: 'High', label: 'High (8k)' },
-                    { value: 'None', label: 'None' }
+                    { value: 'High', label: 'High (8k)' }
                   ]}
                   style={{ minWidth: 140 }}
                 />

@@ -15,7 +15,7 @@ if not logger.handlers:
     )
 
 class LLMCaller:
-    def __init__(self, api_key: str, model_name: str = "gemini-3.1-flash-lite", thinking_level: str = "Low", temperature: float = 0.7, max_retries: int = 3, retry_delay: float = 2.0, fallback_model: str = "gemini-3.1-flash-lite"):
+    def __init__(self, api_key: str, model_name: str = "gemini-3.5-flash-lite", thinking_level: str = "Low", temperature: float = 0.7, max_retries: int = 3, retry_delay: float = 2.0, fallback_model: str = "gemini-3.5-flash-lite"):
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
         self.thinking_level = thinking_level
@@ -46,12 +46,15 @@ class LLMCaller:
             try:
                 logger.info(f"Calling LLM ({self.model_name}) - Attempt {attempt}/{self.max_retries}")
                 
-                config = types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    response_mime_type="application/json",
-                    response_schema=json_format,
-                    temperature=self.temperature
-                )
+                config_kwargs = {
+                    "system_instruction": system_prompt,
+                    "response_mime_type": "application/json",
+                    "response_schema": json_format,
+                }
+                if "gemini-3.5-flash-lite" not in self.model_name and "gemini-3.6-flash" not in self.model_name:
+                    config_kwargs["temperature"] = self.temperature
+                    
+                config = types.GenerateContentConfig(**config_kwargs)
                 
                 thinking = self._get_thinking_config()
                 if thinking:
@@ -69,9 +72,9 @@ class LLMCaller:
                 logger.error(f"LLM call failed on attempt {attempt}: {err_str}")
                 
                 # Fail-fast on 429 Quota/Rate Limit or 503 Overloaded and switch to fallback
-                if "429" in err_str or "503" in err_str:
+                if "429" in err_str or "503" in err_str or "timeout" in err_str.lower() or "timed out" in err_str.lower():
                     if self.model_name != self.fallback_model:
-                        logger.warning(f"Model overloaded. Falling back instantly from {self.model_name} to {self.fallback_model}")
+                        logger.warning(f"Model overloaded or timed out. Falling back instantly from {self.model_name} to {self.fallback_model}")
                         self.model_name = self.fallback_model
                         continue # Retry immediately with fallback model
                 
@@ -87,10 +90,13 @@ class LLMCaller:
             try:
                 logger.info(f"Calling LLM freeform ({self.model_name}) - Attempt {attempt}/{self.max_retries}")
 
-                config = types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=self.temperature
-                )
+                config_kwargs = {
+                    "system_instruction": system_prompt,
+                }
+                if "gemini-3.5-flash-lite" not in self.model_name and "gemini-3.6-flash" not in self.model_name:
+                    config_kwargs["temperature"] = self.temperature
+                    
+                config = types.GenerateContentConfig(**config_kwargs)
 
                 thinking = self._get_thinking_config()
                 if thinking:
@@ -107,9 +113,9 @@ class LLMCaller:
                 err_str = str(e)
                 logger.error(f"LLM freeform call failed on attempt {attempt}: {err_str}")
                 
-                if "429" in err_str or "503" in err_str:
+                if "429" in err_str or "503" in err_str or "timeout" in err_str.lower() or "timed out" in err_str.lower():
                     if self.model_name != self.fallback_model:
-                        logger.warning(f"Model overloaded. Falling back instantly from {self.model_name} to {self.fallback_model}")
+                        logger.warning(f"Model overloaded or timed out. Falling back instantly from {self.model_name} to {self.fallback_model}")
                         self.model_name = self.fallback_model
                         continue
                 
@@ -124,12 +130,15 @@ class LLMCaller:
             try:
                 logger.info(f"Calling LLM async ({self.model_name}) - Attempt {attempt}/{self.max_retries}")
                 
-                config = types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    response_mime_type="application/json",
-                    response_schema=json_format,
-                    temperature=self.temperature
-                )
+                config_kwargs = {
+                    "system_instruction": system_prompt,
+                    "response_mime_type": "application/json",
+                    "response_schema": json_format,
+                }
+                if "gemini-3.5-flash-lite" not in self.model_name and "gemini-3.6-flash" not in self.model_name:
+                    config_kwargs["temperature"] = self.temperature
+                    
+                config = types.GenerateContentConfig(**config_kwargs)
                 
                 thinking = self._get_thinking_config()
                 if thinking:
@@ -146,9 +155,9 @@ class LLMCaller:
                 err_str = str(e)
                 logger.error(f"LLM async call failed on attempt {attempt}: {err_str}")
                 
-                if "429" in err_str or "503" in err_str:
+                if "429" in err_str or "503" in err_str or "timeout" in err_str.lower() or "timed out" in err_str.lower():
                     if self.model_name != self.fallback_model:
-                        logger.warning(f"Model overloaded. Falling back instantly from {self.model_name} to {self.fallback_model}")
+                        logger.warning(f"Model overloaded or timed out. Falling back instantly from {self.model_name} to {self.fallback_model}")
                         self.model_name = self.fallback_model
                         continue
                 
@@ -161,9 +170,13 @@ class LLMCaller:
     def run_stream(self, input_text: str, system_prompt: str, json_format: Type[BaseModel] = None):
         """Yields text chunks for streaming."""
         logger.info(f"Starting LLM stream ({self.model_name})")
-        config = types.GenerateContentConfig(
-            system_instruction=system_prompt,
-        )
+        config_kwargs = {
+            "system_instruction": system_prompt,
+        }
+        if "gemini-3.5-flash-lite" not in self.model_name and "gemini-3.6-flash" not in self.model_name:
+            config_kwargs["temperature"] = self.temperature
+            
+        config = types.GenerateContentConfig(**config_kwargs)
         if json_format:
             config.response_mime_type = "application/json"
             config.response_schema = json_format
