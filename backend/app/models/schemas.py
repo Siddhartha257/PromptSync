@@ -2,7 +2,7 @@ from typing import Any, List, Optional
 from pydantic import BaseModel, Field
 
 class AgentConfig(BaseModel):
-    model: str = "gemini-3.1-flash-lite"
+    model: str = "gemini-3.5-flash-lite"
     thinking_level: str = "Low"
 
 # --- API Models ---
@@ -75,7 +75,7 @@ class VerificationResultModel(BaseModel):
 
 # --- Trial Run Models ---
 class TrialRunConfig(BaseModel):
-    model: str = "gemini-3.1-flash-lite"
+    model: str = "gemini-3.5-flash-lite"
     temperature: float = 0.7
     thinking_level: str = "Low"
 

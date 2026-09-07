@@ -22,9 +22,9 @@ interface SettingsContextType {
 
 const defaultSettings: SettingsState = {
   apiKey: '',
-  orchestrator: { model: 'gemini-3.1-flash-lite', thinking_level: 'Low' },
-  generators: { model: 'gemini-3.1-flash-lite', thinking_level: 'Low' },
-  verifier: { model: 'gemini-3.1-flash-lite', thinking_level: 'Low' },
+  orchestrator: { model: 'gemini-3.5-flash-lite', thinking_level: 'Low' },
+  generators: { model: 'gemini-3.5-flash-lite', thinking_level: 'Low' },
+  verifier: { model: 'gemini-3.5-flash-lite', thinking_level: 'Low' },
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);

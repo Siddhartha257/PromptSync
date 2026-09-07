@@ -72,7 +72,7 @@ export default function Editor() {
 
   // Trial run state
   const [showTrialModal, setShowTrialModal] = useState(false);
-  const [trialModel, setTrialModel] = useState('gemini-3.1-flash-lite');
+  const [trialModel, setTrialModel] = useState('gemini-3.5-flash-lite');
   const [trialTemperature, setTrialTemperature] = useState(0.7);
   const [trialThinking, setTrialThinking] = useState('Low');
   const [trialKb, setTrialKb] = useState('');
