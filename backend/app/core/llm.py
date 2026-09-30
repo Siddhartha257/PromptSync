@@ -603,39 +603,65 @@ class ChatGoogleGenAI(BaseChatModel):
 
         if not self._client:
             raise ValueError("No Gemini API key provided. Please configure an API key in Settings.")
-        response = await self._client.aio.models.generate_content_stream(
-            model=self.model_name,
-            contents=contents,
-            config=config
-        )
-        async for chunk in response:
-            delta_text = ""
-            if hasattr(chunk, "candidates") and chunk.candidates:
-                cand = chunk.candidates[0]
-                if hasattr(cand, "content") and hasattr(cand.content, "parts") and cand.content.parts:
-                    for p in cand.content.parts:
-                        if getattr(p, "text", None):
-                            delta_text += p.text
-            elif hasattr(chunk, "text") and chunk.text:
-                try:
-                    delta_text = chunk.text
-                except Exception:
-                    pass
 
-            tool_call_chunks = []
-            if hasattr(chunk, "function_calls") and chunk.function_calls:
-                for idx, fc in enumerate(chunk.function_calls):
-                    tool_call_chunks.append({
-                        "name": fc.name,
-                        "args": json.dumps(dict(fc.args)) if fc.args else "{}",
-                        "id": f"call_{fc.name}_{int(time.time()*1000)}_{idx}",
-                        "index": idx
-                    })
-            msg_chunk = AIMessageChunk(content=delta_text, tool_call_chunks=tool_call_chunks)
-            gen_chunk = ChatGenerationChunk(message=msg_chunk)
-            if run_manager and delta_text:
-                await run_manager.on_llm_new_token(delta_text, chunk=gen_chunk)
-            yield gen_chunk
+        # Same transient-error retry / fallback-model-swap as _generate/_agenerate, but scoped to
+        # stream SETUP only: once a chunk has actually reached the caller (an SSE client already
+        # rendering tokens), restarting the whole generation from scratch would duplicate the text
+        # already sent, so a genuinely mid-stream failure is left to propagate instead of being
+        # retried. Without this, a single transient 503 ("model experiencing high demand" — which
+        # Gemini returns intermittently regardless of where the caller is hosted) killed the entire
+        # stream outright, since this path had no retry logic at all unlike the non-streaming one.
+        for attempt in range(1, self.max_retries + 1):
+            yielded_any = False
+            try:
+                response = await self._client.aio.models.generate_content_stream(
+                    model=self.model_name,
+                    contents=contents,
+                    config=config
+                )
+                async for chunk in response:
+                    yielded_any = True
+                    delta_text = ""
+                    if hasattr(chunk, "candidates") and chunk.candidates:
+                        cand = chunk.candidates[0]
+                        if hasattr(cand, "content") and hasattr(cand.content, "parts") and cand.content.parts:
+                            for p in cand.content.parts:
+                                if getattr(p, "text", None):
+                                    delta_text += p.text
+                    elif hasattr(chunk, "text") and chunk.text:
+                        try:
+                            delta_text = chunk.text
+                        except Exception:
+                            pass
+
+                    tool_call_chunks = []
+                    if hasattr(chunk, "function_calls") and chunk.function_calls:
+                        for idx, fc in enumerate(chunk.function_calls):
+                            tool_call_chunks.append({
+                                "name": fc.name,
+                                "args": json.dumps(dict(fc.args)) if fc.args else "{}",
+                                "id": f"call_{fc.name}_{int(time.time()*1000)}_{idx}",
+                                "index": idx
+                            })
+                    msg_chunk = AIMessageChunk(content=delta_text, tool_call_chunks=tool_call_chunks)
+                    gen_chunk = ChatGenerationChunk(message=msg_chunk)
+                    if run_manager and delta_text:
+                        await run_manager.on_llm_new_token(delta_text, chunk=gen_chunk)
+                    yield gen_chunk
+                return
+            except Exception as e:
+                if yielded_any:
+                    raise
+                err_str = str(e)
+                if "429" in err_str or "500" in err_str or "503" in err_str or "internal" in err_str.lower() or "timeout" in err_str.lower():
+                    if self.model_name != self.fallback_model:
+                        logger.warning(f"Falling back stream from {self.model_name} to {self.fallback_model}")
+                        self.model_name = self.fallback_model
+                        continue
+                if attempt < self.max_retries:
+                    await asyncio.sleep(self.retry_delay)
+                else:
+                    raise
 
     def with_structured_output(self, schema: Union[Type[BaseModel], dict]):
         """Constrains generation via response_schema and parses result."""
