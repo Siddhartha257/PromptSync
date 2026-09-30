@@ -70,6 +70,13 @@ The key names used in the RULES section, OUTPUT FORMAT section, EXAMPLE, and ANT
 CRITICAL RULE 10 — CHAIN OF THOUGHT PLACEMENT:
 If the task requires any analysis, reasoning, classification, or multi-step evaluation before arriving at a structured conclusion, the generated prompt MUST instruct the AI to populate a `chain_of_thought` (or equivalent reasoning key specified in the instruction) as the VERY FIRST key in its JSON output. This key must be type string, required, and must instruct the AI to write out its full step-by-step reasoning BEFORE populating any conclusion keys. This ensures the AI "thinks before it concludes" and produces higher-quality structured output.
 
+CRITICAL RULE 11 — FORBID SCHEMA META-PROPERTIES ($schema, $id, $defs, additionalProperties):
+The prompt you generate MUST explicitly forbid schema meta-properties in the output JSON.
+NEVER include "$schema", "$id", "$defs", or "additionalProperties" in the prompt's OUTPUT FORMAT, RULES, or EXAMPLE outputs.
+"$schema" is a meta-property of the JSON Schema specification document itself — it is NOT a field of the generated JSON output payload. Instructing the AI to include "$schema" or showing "$schema" in example outputs causes severe schema validation failures (e.g. Pydantic 'Extra inputs are not permitted').
+Under RULES, ALWAYS include an explicit rule:
+"- Do NOT include '$schema', '$id', '$defs', or any schema meta-properties in the output JSON. Return only the data fields defined in the schema."
+
 ═══════════════════════════════════════════
 MODEL-SPECIFIC BEST PRACTICES
 ═══════════════════════════════════════════

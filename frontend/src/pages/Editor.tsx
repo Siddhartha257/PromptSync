@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
-import { Play, CheckCircle, AlertCircle, ArrowRight, Check, ShieldCheck, X, Code } from 'lucide-react';
+import {
+  Play, CheckCircle, AlertCircle, ArrowRight, Check,
+  ShieldCheck, Code, Sparkles, FlaskConical
+} from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
@@ -9,40 +12,52 @@ import { markdown } from '@codemirror/lang-markdown';
 import { ThemeContext } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
-import CustomSelect from '../components/CustomSelect';
+import { getKeyForModel } from '../utils/providers';
 import ExportModal from '../components/ExportModal';
+import CopilotChat, { type ActionProposalData } from '../components/CopilotChat';
+import TrialRunModal from '../components/TrialRunModal';
+import OptimizationWindow from '../components/OptimizationWindow';
 import { API_URL } from '../services/api';
 import '../index.css';
+
+type RightTab = 'prompt' | 'schema';
 
 export default function Editor() {
   const location = useLocation();
   const { theme } = React.useContext(ThemeContext);
-  const { settings, setIsSettingsOpen } = useSettings();
+  const { settings } = useSettings();
   const { showToast } = useToast();
 
   const STORAGE_KEY = 'prompter_editor_state';
 
-  // Initialise from navigation state first, then fall back to localStorage, then empty
   const savedState = (() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; }
   })();
 
-  const [prompt, setPrompt] = useState(
-    location.state?.initialPrompt ?? savedState?.prompt ?? ''
-  );
-  const [schema, setSchema] = useState(
-    location.state?.initialSchema ?? savedState?.schema ?? ''
-  );
+  const [prompt, setPrompt] = useState(location.state?.initialPrompt ?? savedState?.prompt ?? '');
+  const [schema, setSchema] = useState(location.state?.initialSchema ?? savedState?.schema ?? '');
 
-  // Persist to localStorage whenever prompt or schema changes
+  // CopilotChat persists its session id + message history in sessionStorage so a page refresh
+  // doesn't lose an in-progress conversation — but that persistence is keyed globally per browser
+  // tab, with no notion of "which document" it belongs to. `location.state.initialPrompt` being
+  // present means this Editor mount is a genuinely NEW document (Home's Build-from-Scratch /
+  // orchestrated-generation flow always sets it), as opposed to resuming the last open one via
+  // localStorage — so the old chat session must NOT carry over into it. Done here, synchronously
+  // during render (not a useEffect, which would fire after CopilotChat has already mounted and
+  // read the stale sessionStorage), guarded by a ref so it only runs once per Editor mount.
+  const didResetChatSessionRef = useRef(false);
+  if (!didResetChatSessionRef.current && location.state?.initialPrompt !== undefined) {
+    didResetChatSessionRef.current = true;
+    const oldChatSessionId = sessionStorage.getItem('prompter_chat_session_id');
+    if (oldChatSessionId) sessionStorage.removeItem(`prompter_chat_msgs_${oldChatSessionId}`);
+    sessionStorage.removeItem('prompter_chat_session_id');
+  }
+
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ prompt, schema }));
-    } catch { /* storage full or unavailable — silently ignore */ }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ prompt, schema })); } catch { /* ignore */ }
   }, [prompt, schema]);
-  
-  const [showExportModal, setShowExportModal] = useState(false);
 
+  const [showExportModal, setShowExportModal] = useState(false);
   const [userRequest, setUserRequest] = useState('');
 
   // Modal & Flow state
@@ -56,7 +71,7 @@ export default function Editor() {
   const [runPromptAgent, setRunPromptAgent] = useState(true);
   const [runSchemaAgent, setRunSchemaAgent] = useState(true);
 
-  // Verification state (plan-level)
+  // Verification state
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{ is_aligned: boolean; reason: string } | null>(null);
 
@@ -65,60 +80,47 @@ export default function Editor() {
   const [newPrompt, setNewPrompt] = useState('');
   const [newSchema, setNewSchema] = useState('');
 
-  // Output verification state
+  // Output verification
   const [isOutputVerifying, setIsOutputVerifying] = useState(false);
   const [outputVerificationResult, setOutputVerificationResult] = useState<{ is_aligned: boolean; reason: string; prompt_updater_instruction?: string; schema_updater_instruction?: string } | null>(null);
   const [fixAlignmentPending, setFixAlignmentPending] = useState(false);
 
-  // Trial run state
-  const [showTrialModal, setShowTrialModal] = useState(false);
-  const [trialModel, setTrialModel] = useState('gemini-3.5-flash-lite');
-  const [trialTemperature, setTrialTemperature] = useState(0.7);
-  const [trialThinking, setTrialThinking] = useState('Low');
-  const [trialKb, setTrialKb] = useState('');
-  const [trialQuery, setTrialQuery] = useState('');
-  const [trialResult, setTrialResult] = useState('');
-  const [isTrialRunning, setIsTrialRunning] = useState(false);
+  // Layout state
+  const [isChatOpen, setIsChatOpen] = useState(true);
+  const [rightTab, setRightTab] = useState<RightTab>('prompt');
 
-  const handleTrialRun = async () => {
-    if (!settings.apiKey) { setIsSettingsOpen(true); return; }
-    if (!trialQuery.trim()) { showToast('Query is required', 'error'); return; }
-    
-    setIsTrialRunning(true);
-    setTrialResult('');
-    
-    try {
-      const res = await axios.post(`${API_URL}/trial_run`, {
-        api_key: settings.apiKey,
-        config: {
-          model: trialModel,
-          temperature: trialTemperature,
-          thinking_level: trialThinking
-        },
-        prompt: prompt,
-        json_schema: schema,
-        knowledge_base: trialKb,
-        query: trialQuery
-      }, { timeout: 180000 });
-      setTrialResult(res.data.result);
-    } catch (err: any) {
-      setTrialResult(err.response?.data?.detail || err.message);
-    } finally {
-      setIsTrialRunning(false);
-    }
+  // New modal windows
+  const [showTrialModal, setShowTrialModal] = useState(false);
+  const [showOptimizeModal, setShowOptimizeModal] = useState(false);
+
+  // Shortcut Cmd+L to toggle chat panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        setIsChatOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleApplyChatProposal = (proposal: ActionProposalData) => {
+    setPromptInstruction(proposal.prompt_instruction || '');
+    setSchemaInstruction(proposal.schema_instruction || '');
+    setRunPromptAgent(!!proposal.prompt_instruction);
+    setRunSchemaAgent(!!proposal.schema_instruction);
+    setShowPlanModal(true);
+    showToast('Applied chat proposal to Plan Review', 'success');
   };
 
   const handleOrchestrate = async () => {
-    if (!settings.apiKey) {
-      setIsSettingsOpen(true);
-      return;
-    }
     if (!userRequest.trim()) return;
     setIsLoading(true);
     setVerificationResult(null);
     try {
       const res = await axios.post(`${API_URL}/orchestrate`, {
-        api_key: settings.apiKey,
+        api_key: getKeyForModel(settings.apiKeys, settings.orchestrator.model, settings.orchestrator.provider),
         config: settings.orchestrator,
         prompt,
         json_schema: schema,
@@ -137,11 +139,10 @@ export default function Editor() {
   };
 
   const handleVerify = async () => {
-    if (!settings.apiKey) { setIsSettingsOpen(true); return; }
     setIsVerifying(true);
     try {
       const res = await axios.post(`${API_URL}/verify`, {
-        api_key: settings.apiKey,
+        api_key: getKeyForModel(settings.apiKeys, settings.verifier.model, settings.verifier.provider),
         config: settings.verifier,
         prompt_instruction: promptInstruction,
         schema_instruction: schemaInstruction,
@@ -155,21 +156,18 @@ export default function Editor() {
   };
 
   const handleVerifyOutput = async (overridePrompt?: string, overrideSchema?: string) => {
-    if (!settings.apiKey) { setIsSettingsOpen(true); return; }
     setIsOutputVerifying(true);
     const p = overridePrompt ?? prompt;
     const s = overrideSchema ?? schema;
     try {
       const res = await axios.post(`${API_URL}/verify_output`, {
-        api_key: settings.apiKey,
+        api_key: getKeyForModel(settings.apiKeys, settings.verifier.model, settings.verifier.provider),
         config: settings.verifier,
         prompt: p,
         json_schema: s,
       });
       setOutputVerificationResult(res.data);
-      if (res.data.is_aligned) {
-        setTimeout(() => setOutputVerificationResult(null), 5000);
-      }
+      if (res.data.is_aligned) setTimeout(() => setOutputVerificationResult(null), 5000);
     } catch {
       showToast('Output verification failed.', 'error');
     } finally {
@@ -178,11 +176,10 @@ export default function Editor() {
   };
 
   const handleApply = async () => {
-    if (!settings.apiKey) { setIsSettingsOpen(true); return; }
     setIsApplying(true);
     try {
       const res = await axios.post(`${API_URL}/apply_edits`, {
-        api_key: settings.apiKey,
+        api_key: getKeyForModel(settings.apiKeys, settings.generators.model, settings.generators.provider),
         config: settings.generators,
         prompt,
         json_schema: schema,
@@ -191,7 +188,7 @@ export default function Editor() {
       }, { timeout: 180000 });
       setNewPrompt(res.data.new_prompt);
       setNewSchema(res.data.new_json_schema);
-      
+
       if (res.data.errors && (res.data.errors.prompt || res.data.errors.schema)) {
         let msg = 'Partial success! ';
         if (res.data.errors.prompt) msg += `Prompt Agent failed: ${res.data.errors.prompt} `;
@@ -202,8 +199,7 @@ export default function Editor() {
       setShowPlanModal(false);
       setShowDiffModal(true);
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || 'Error applying edits.';
-      showToast(errorMessage, 'error');
+      showToast(err.response?.data?.detail || 'Error applying edits.', 'error');
     } finally {
       setIsApplying(false);
     }
@@ -217,28 +213,23 @@ export default function Editor() {
     setOutputVerificationResult(null);
     if (fixAlignmentPending) {
       setFixAlignmentPending(false);
-      // Pass newPrompt/newSchema explicitly to avoid stale closure
       handleVerifyOutput(newPrompt, newSchema);
     }
   };
 
   const handleFixAlignment = (source: 'prompt' | 'schema') => {
     if (!outputVerificationResult) return;
-    
     if (source === 'schema') {
       setPromptInstruction('');
       setRunPromptAgent(false);
-      const aiInstruction = outputVerificationResult.schema_updater_instruction || outputVerificationResult.reason;
-      setSchemaInstruction(aiInstruction);
+      setSchemaInstruction(outputVerificationResult.schema_updater_instruction || outputVerificationResult.reason);
       setRunSchemaAgent(true);
     } else {
       setSchemaInstruction('');
       setRunSchemaAgent(false);
-      const aiInstruction = outputVerificationResult.prompt_updater_instruction || outputVerificationResult.reason;
-      setPromptInstruction(aiInstruction);
+      setPromptInstruction(outputVerificationResult.prompt_updater_instruction || outputVerificationResult.reason);
       setRunPromptAgent(true);
     }
-    
     setFixAlignmentPending(true);
     setOutputVerificationResult(null);
     setShowPlanModal(true);
@@ -246,47 +237,115 @@ export default function Editor() {
 
   return (
     <>
-      {/* ── MAIN SPLIT PANE ── */}
-      <main className="main-content">
-        <div className="split-pane">
-          <div className="pane">
-            <div className="pane-header">System Prompt</div>
-            <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none' }}>
-              <CodeMirror
-                value={prompt}
-                height="100%"
-                extensions={[markdown()]}
-                onChange={(value) => setPrompt(value)}
-                theme={theme === 'dark' ? 'dark' : 'light'}
-                style={{ flex: 1, fontSize: '0.85rem' }}
-                placeholder="Your system prompt will appear here..."
-              />
-            </div>
+      {/* ── MAIN SPLIT LAYOUT ── */}
+      <main className="main-content" style={{ display: 'flex', overflow: 'hidden', position: 'relative' }}>
+
+        {/* ── LEFT PANEL: Co-Pilot Chat (40%) ── */}
+        <div
+          style={{
+            width: isChatOpen ? '40%' : 0,
+            minWidth: isChatOpen ? 320 : 0,
+            maxWidth: isChatOpen ? 600 : 0,
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            borderRight: isChatOpen ? '1px solid var(--border-color)' : 'none',
+            overflow: 'hidden',
+            transition: 'width 0.2s ease, min-width 0.2s ease',
+            position: 'relative'
+          }}
+        >
+          {isChatOpen && (
+            <CopilotChat
+              prompt={prompt}
+              schema={schema}
+              theme={theme}
+              onApplyProposal={handleApplyChatProposal}
+            />
+          )}
+        </div>
+
+        {/* ── RIGHT PANEL: Prompt + Schema Editors (60%) ── */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* Tab toggle header */}
+          <div style={{
+            display: 'flex',
+            borderBottom: '1px solid var(--border-color)',
+            background: 'var(--bg-secondary)',
+            flexShrink: 0
+          }}>
+            <button
+              onClick={() => setRightTab('prompt')}
+              style={{
+                padding: '10px 20px',
+                fontSize: '0.83rem',
+                fontWeight: 500,
+                color: rightTab === 'prompt' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                background: 'none',
+                border: 'none',
+                borderBottom: rightTab === 'prompt' ? '2px solid var(--accent-primary)' : '2px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+            >
+              System Prompt
+            </button>
+            <button
+              onClick={() => setRightTab('schema')}
+              style={{
+                padding: '10px 20px',
+                fontSize: '0.83rem',
+                fontWeight: 500,
+                color: rightTab === 'schema' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                background: 'none',
+                border: 'none',
+                borderBottom: rightTab === 'schema' ? '2px solid var(--accent-primary)' : '2px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+            >
+              JSON Schema
+            </button>
+            {rightTab === 'schema' && (
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', padding: '0 12px' }}>
+                <button
+                  className="btn btn-outline"
+                  style={{ padding: '4px 10px', fontSize: '0.75rem', gap: 6 }}
+                  onClick={() => setShowExportModal(true)}
+                >
+                  <Code size={12} /> Export Code
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="pane-divider" />
-
-          <div className="pane">
-            <div className="pane-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>JSON Schema</span>
-              <button 
-                className="btn btn-outline" 
-                style={{ padding: '4px 8px', fontSize: '0.75rem', gap: 6, borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}
-                onClick={() => setShowExportModal(true)}
-              >
-                <Code size={12} /> Export Code
-              </button>
+          {/* Editors */}
+          <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: 0, display: rightTab === 'prompt' ? 'flex' : 'none', flexDirection: 'column' }}>
+              <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none' }}>
+                <CodeMirror
+                  value={prompt}
+                  height="100%"
+                  extensions={[markdown()]}
+                  onChange={value => setPrompt(value)}
+                  theme={theme === 'dark' ? 'dark' : 'light'}
+                  style={{ flex: 1, fontSize: '0.85rem' }}
+                  placeholder="Your system prompt will appear here…"
+                />
+              </div>
             </div>
-            <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none' }}>
-              <CodeMirror
-                value={schema}
-                height="100%"
-                extensions={[json()]}
-                onChange={(value) => setSchema(value)}
-                theme={theme === 'dark' ? 'dark' : 'light'}
-                style={{ flex: 1, fontSize: '0.85rem' }}
-                placeholder="Your JSON schema will appear here..."
-              />
+            <div style={{ position: 'absolute', inset: 0, display: rightTab === 'schema' ? 'flex' : 'none', flexDirection: 'column' }}>
+              <div className="editor-container" style={{ flex: 1, overflow: 'auto', display: 'flex', border: 'none' }}>
+                <CodeMirror
+                  value={schema}
+                  height="100%"
+                  extensions={[json()]}
+                  onChange={value => setSchema(value)}
+                  theme={theme === 'dark' ? 'dark' : 'light'}
+                  style={{ flex: 1, fontSize: '0.85rem' }}
+                  placeholder="Your JSON schema will appear here…"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -311,24 +370,15 @@ export default function Editor() {
               <p style={{ fontSize: '1.05rem', lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0 }}>
                 {outputVerificationResult.reason}
               </p>
-              
               {!outputVerificationResult.is_aligned && (
                 <div style={{ display: 'flex', gap: 12, marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border-color)' }}>
                   {outputVerificationResult.schema_updater_instruction && (
-                    <button 
-                      className="btn btn-primary" 
-                      onClick={() => handleFixAlignment('schema')}
-                      style={{ flex: 1 }}
-                    >
+                    <button className="btn btn-primary" onClick={() => handleFixAlignment('schema')} style={{ flex: 1 }}>
                       Fix Schema (Match to Prompt)
                     </button>
                   )}
                   {outputVerificationResult.prompt_updater_instruction && (
-                    <button 
-                      className="btn btn-outline" 
-                      onClick={() => handleFixAlignment('prompt')}
-                      style={{ flex: 1 }}
-                    >
+                    <button className="btn btn-outline" onClick={() => handleFixAlignment('prompt')} style={{ flex: 1 }}>
                       Fix Prompt (Match to Schema)
                     </button>
                   )}
@@ -373,11 +423,28 @@ export default function Editor() {
         <button
           className="btn btn-outline"
           onClick={() => setShowTrialModal(true)}
-          style={{ minWidth: 120 }}
-          title="Test run your prompt and schema"
+          style={{ minWidth: 110, gap: 7 }}
+          title="Single-Query Trial Sandbox"
         >
-          <Play size={15} />
-          Trial Run
+          <Play size={15} /> Trial Run
+        </button>
+
+        <button
+          className="btn btn-outline"
+          onClick={() => setShowOptimizeModal(true)}
+          style={{ minWidth: 110, gap: 7 }}
+          title="Prompt Test & Optimization Lab"
+        >
+          <FlaskConical size={15} /> Optimize
+        </button>
+
+        <button
+          className={`btn ${isChatOpen ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setIsChatOpen(p => !p)}
+          style={{ minWidth: 110, gap: 7 }}
+          title="Toggle AI Co-Pilot (Cmd+L)"
+        >
+          <Sparkles size={15} /> Co-Pilot
         </button>
       </footer>
 
@@ -385,8 +452,6 @@ export default function Editor() {
       {showPlanModal && (
         <div className="modal-overlay">
           <div className="modal-content glass-modal" style={{ maxWidth: '90%', width: '1400px', height: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-
-            {/* ── HEADER ── */}
             <div className="modal-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '22px' }}>
               <div>
                 <h2>Orchestrator Plan</h2>
@@ -397,11 +462,8 @@ export default function Editor() {
               <button className="btn btn-outline" onClick={() => setShowPlanModal(false)}>Cancel</button>
             </div>
 
-            {/* ── SPLIT PANE BODY ── */}
             <div className="modal-body" style={{ padding: 0, overflow: 'hidden', flex: 1, display: 'flex' }}>
               <div className="split-pane" style={{ flex: 1, minHeight: 0 }}>
-
-                {/* ── LEFT: Prompt Agent ── */}
                 <div className="pane">
                   <div className="pane-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>Prompt Agent Instructions</span>
@@ -415,7 +477,7 @@ export default function Editor() {
                       value={promptInstruction}
                       height="100%"
                       extensions={[markdown()]}
-                      onChange={(value) => setPromptInstruction(value)}
+                      onChange={value => setPromptInstruction(value)}
                       theme={theme === 'dark' ? 'dark' : 'light'}
                       editable={runPromptAgent}
                       style={{ flex: 1, fontSize: '0.82rem' }}
@@ -425,7 +487,6 @@ export default function Editor() {
 
                 <div className="pane-divider" />
 
-                {/* ── RIGHT: Schema Agent ── */}
                 <div className="pane">
                   <div className="pane-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>Schema Agent Instructions</span>
@@ -439,20 +500,17 @@ export default function Editor() {
                       value={schemaInstruction}
                       height="100%"
                       extensions={[markdown()]}
-                      onChange={(value) => setSchemaInstruction(value)}
+                      onChange={value => setSchemaInstruction(value)}
                       theme={theme === 'dark' ? 'dark' : 'light'}
                       editable={runSchemaAgent}
                       style={{ flex: 1, fontSize: '0.82rem' }}
                     />
                   </div>
                 </div>
-
               </div>
             </div>
 
-            {/* ── FOOTER ── */}
             <div className="modal-footer" style={{ flexDirection: 'column', gap: 12, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
-              {/* Verification result */}
               {verificationResult && (
                 <div className={`alert ${verificationResult.is_aligned ? 'alert-success' : 'alert-danger'}`} style={{ margin: 0 }}>
                   <div style={{ flexShrink: 0, marginTop: 1 }}>
@@ -475,11 +533,9 @@ export default function Editor() {
                 </button>
               </div>
             </div>
-
           </div>
         </div>
       )}
-
 
       {/* ── DIFF REVIEW MODAL ── */}
       {showDiffModal && (
@@ -505,28 +561,10 @@ export default function Editor() {
                     splitView={false}
                     useDarkTheme={theme === 'dark'}
                     compareMethod={DiffMethod.WORDS}
-                    styles={{
-                      variables: {
-                        dark: {
-                          diffViewerBackground: 'var(--bg-secondary)',
-                          addedBackground: 'rgba(16, 185, 129, 0.12)',
-                          removedBackground: 'rgba(248, 113, 113, 0.12)',
-                          addedColor: '#10b981',
-                          removedColor: '#f87171',
-                          codeFoldBackground: 'var(--bg-tertiary)',
-                          emptyLineBackground: 'var(--bg-primary)',
-                        },
-                        light: {
-                          diffViewerBackground: '#ffffff',
-                          addedBackground: 'rgba(5, 150, 105, 0.08)',
-                          removedBackground: 'rgba(220, 38, 38, 0.08)',
-                        },
-                      },
-                    }}
+                    styles={{ variables: { dark: { diffViewerBackground: 'var(--bg-secondary)', addedBackground: 'rgba(16,185,129,0.12)', removedBackground: 'rgba(248,113,113,0.12)', addedColor: '#10b981', removedColor: '#f87171' }, light: { diffViewerBackground: '#ffffff', addedBackground: 'rgba(5,150,105,0.08)', removedBackground: 'rgba(220,38,38,0.08)' } } }}
                   />
                 </div>
               </div>
-
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div className="pane-header">JSON Schema Diff</div>
                 <div className="diff-wrapper" style={{ flex: 1, borderRadius: 0, border: 'none' }}>
@@ -536,22 +574,7 @@ export default function Editor() {
                     splitView={false}
                     useDarkTheme={theme === 'dark'}
                     compareMethod={DiffMethod.WORDS}
-                    styles={{
-                      variables: {
-                        dark: {
-                          diffViewerBackground: 'var(--bg-secondary)',
-                          addedBackground: 'rgba(16, 185, 129, 0.12)',
-                          removedBackground: 'rgba(248, 113, 113, 0.12)',
-                          addedColor: '#10b981',
-                          removedColor: '#f87171',
-                        },
-                        light: {
-                          diffViewerBackground: '#ffffff',
-                          addedBackground: 'rgba(5, 150, 105, 0.08)',
-                          removedBackground: 'rgba(220, 38, 38, 0.08)',
-                        },
-                      },
-                    }}
+                    styles={{ variables: { dark: { diffViewerBackground: 'var(--bg-secondary)', addedBackground: 'rgba(16,185,129,0.12)', removedBackground: 'rgba(248,113,113,0.12)', addedColor: '#10b981', removedColor: '#f87171' }, light: { diffViewerBackground: '#ffffff', addedBackground: 'rgba(5,150,105,0.08)', removedBackground: 'rgba(220,38,38,0.08)' } } }}
                   />
                 </div>
               </div>
@@ -565,151 +588,39 @@ export default function Editor() {
           </div>
         </div>
       )}
+
       {/* ── TRIAL RUN MODAL ── */}
-      {showTrialModal && (
-        <div className="modal-overlay">
-          <div className="modal-content glass-modal" style={{ maxWidth: '90%', width: '1400px', height: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            
-            {/* ── HEADER ── */}
-            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
-              <div>
-                <h2>Trial Run Console</h2>
-              </div>
-              <button className="btn btn-outline" onClick={() => setShowTrialModal(false)} style={{ padding: 8 }}>
-                <X size={20} />
-              </button>
-            </div>
+      <TrialRunModal
+        isOpen={showTrialModal}
+        onClose={() => setShowTrialModal(false)}
+        prompt={prompt}
+        schema={schema}
+        theme={theme}
+      />
 
-            {/* ── CONFIG TOOLBAR ── */}
-            <div className="toolbar">
-              <div className="toolbar-group">
-                <span className="toolbar-label">Model</span>
-                <CustomSelect 
-                  value={trialModel} 
-                  onChange={setTrialModel}
-                  options={[
-                    { value: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
-                    { value: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash' },
-                    { value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
-                    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
-                    { value: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite' },
-                    { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
-                    { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash' },
-                    { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite' },
-                    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-                    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-                    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
-                    { value: 'gemma-4-31b-it', label: 'Gemma 4 (31B)' },
-                    { value: 'gemma-4-26b-a4b-it', label: 'Gemma 4 (26B A4B)' }
-                  ]}
-                  style={{ minWidth: 200 }}
-                />
-              </div>
-
-              <div className="toolbar-group" style={{ marginLeft: 16 }}>
-                <span className="toolbar-label">Thinking</span>
-                <CustomSelect 
-                  value={trialThinking} 
-                  onChange={setTrialThinking}
-                  options={[
-                    { value: 'None', label: 'None' },
-                    { value: 'Minimal', label: 'Minimal' },
-                    { value: 'Low', label: 'Low (1k)' },
-                    { value: 'Medium', label: 'Medium (4k)' },
-                    { value: 'High', label: 'High (8k)' }
-                  ]}
-                  style={{ minWidth: 140 }}
-                />
-              </div>
-
-              <div className="toolbar-group" style={{ marginLeft: 16 }}>
-                <span className="toolbar-label">Temp: {trialTemperature}</span>
-                <input
-                  type="range"
-                  className="toolbar-slider"
-                  min="0" max="2" step="0.1"
-                  value={trialTemperature}
-                  onChange={e => setTrialTemperature(parseFloat(e.target.value))}
-                />
-              </div>
-
-              <div style={{ flex: 1 }} />
-
-              <button
-                className="btn btn-primary"
-                onClick={handleTrialRun}
-                disabled={isTrialRunning || !trialQuery.trim()}
-                style={{ padding: '6px 20px', minWidth: 120, height: 32 }}
-              >
-                {isTrialRunning ? <div className="loader" style={{ width: 14, height: 14, borderWidth: 2, borderTopColor: '#fff' }} /> : <><Play size={14} /> Run Trial</>}
-              </button>
-            </div>
-
-            {/* ── EDGE-TO-EDGE SPLIT PANE ── */}
-            <div className="split-pane" style={{ flex: 1, position: 'relative', minHeight: 0 }}>
-              {isTrialRunning && (
-                <div style={{ position: 'absolute', inset: 0, background: 'var(--bg-glass)', backdropFilter: 'blur(4px)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <div className="loader" style={{ width: 30, height: 30, borderWidth: 3, borderTopColor: 'var(--accent-primary)' }} />
-                </div>
-              )}
-              
-              <div className="pane" style={{ flex: '0 0 45%', minHeight: 0 }}>
-                <div className="pane-header">Knowledge Base (Optional)</div>
-                <div className="editor-container" style={{ flex: 1, padding: 0, display: 'flex', minHeight: 0 }}>
-                  <CodeMirror
-                    value={trialKb}
-                    height="100%"
-                    extensions={[markdown()]}
-                    onChange={setTrialKb}
-                    theme={theme === 'dark' ? 'dark' : 'light'}
-                    style={{ flex: 1, fontSize: '0.85rem' }}
-                    placeholder="Paste documents, emails, or context data here..."
-                  />
-                </div>
-                
-                <div className="pane-divider" style={{ width: '100%', height: 1 }} />
-                
-                <div className="pane-header">User Query</div>
-                <div className="editor-container" style={{ flex: 1, padding: 0, display: 'flex', minHeight: 0 }}>
-                  <CodeMirror
-                    value={trialQuery}
-                    height="100%"
-                    extensions={[]}
-                    onChange={setTrialQuery}
-                    theme={theme === 'dark' ? 'dark' : 'light'}
-                    style={{ flex: 1, fontSize: '0.85rem' }}
-                    placeholder="What should the model do?"
-                  />
-                </div>
-              </div>
-
-              <div className="pane-divider" />
-
-              <div className="pane" style={{ minHeight: 0 }}>
-                <div className="pane-header">LLM Output (JSON)</div>
-                <div className="editor-container" style={{ flex: 1, padding: 0, display: 'flex', minHeight: 0 }}>
-                  <CodeMirror
-                    value={trialResult}
-                    height="100%"
-                    extensions={[json()]}
-                    theme={theme === 'dark' ? 'dark' : 'light'}
-                    editable={false}
-                    style={{ flex: 1, fontSize: '0.85rem' }}
-                    placeholder="Output will appear here..."
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── OPTIMIZATION WINDOW ── */}
+      <OptimizationWindow
+        isOpen={showOptimizeModal}
+        onClose={() => setShowOptimizeModal(false)}
+        prompt={prompt}
+        schema={schema}
+        theme={theme}
+        onApplyPrompt={newP => {
+          setPrompt(newP);
+          showToast('Promoted optimized prompt to Editor!', 'success');
+        }}
+        onApplySchema={newS => {
+          setSchema(newS);
+          showToast('Promoted optimized schema to Editor!', 'success');
+        }}
+      />
 
       {/* ── EXPORT MODAL ── */}
-      <ExportModal 
-        isOpen={showExportModal} 
-        onClose={() => setShowExportModal(false)} 
-        schemaStr={schema} 
-        theme={theme} 
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        schemaStr={schema}
+        theme={theme}
       />
     </>
   );

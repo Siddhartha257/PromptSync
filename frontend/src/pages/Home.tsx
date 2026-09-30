@@ -3,9 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
   Bot, Wand2, Edit3, ArrowRight, Play, CheckCircle,
-  GitBranch, Layers, ShieldCheck, Cpu, Zap, AlertCircle
+  GitBranch, Layers, ShieldCheck, Cpu, Zap, AlertCircle,
+  Network, MessageSquare, FlaskConical
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
+import { getKeyForModel } from '../utils/providers';
 import { API_URL } from '../services/api';
 import { ThemeContext } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -17,7 +19,7 @@ import '../index.css';
 export default function Home() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { settings, setIsSettingsOpen } = useSettings();
+  const { settings } = useSettings();
   const { theme } = useContext(ThemeContext);
   const { showToast } = useToast();
 
@@ -73,15 +75,11 @@ export default function Home() {
   }, [mode, showDualStreams]);
 
   const handleGeneratePlan = async () => {
-    if (!settings.apiKey) {
-      setIsSettingsOpen(true);
-      return;
-    }
     if (!userRequest.trim()) return;
     setIsPlanning(true);
     try {
       const res = await axios.post(`${API_URL}/orchestrate`, {
-        api_key: settings.apiKey,
+        api_key: getKeyForModel(settings.apiKeys, settings.orchestrator.model, settings.orchestrator.provider),
         config: settings.orchestrator,
         prompt: '',
         json_schema: '',
@@ -101,11 +99,10 @@ export default function Home() {
   };
 
   const handleVerify = async () => {
-    if (!settings.apiKey) { setIsSettingsOpen(true); return; }
     setIsVerifying(true);
     try {
       const res = await axios.post(`${API_URL}/verify`, {
-        api_key: settings.apiKey,
+        api_key: getKeyForModel(settings.apiKeys, settings.verifier.model, settings.verifier.provider),
         config: settings.verifier,
         prompt_instruction: promptInstruction,
         schema_instruction: schemaInstruction,
@@ -164,10 +161,11 @@ export default function Home() {
     setGeneratedPrompt('');
     setGeneratedSchema('');
     const promises = [];
+    const generatorsApiKey = getKeyForModel(settings.apiKeys, settings.generators.model, settings.generators.provider);
     if (runPromptAgent)
-      promises.push(streamFromEndpoint('stream/prompt', { api_key: settings.apiKey, config: settings.generators, instruction: promptInstruction, target_model: targetModel }, chunk => setGeneratedPrompt(p => p + chunk)));
+      promises.push(streamFromEndpoint('stream/prompt', { api_key: generatorsApiKey, config: settings.generators, instruction: promptInstruction, target_model: targetModel }, chunk => setGeneratedPrompt(p => p + chunk)));
     if (runSchemaAgent)
-      promises.push(streamFromEndpoint('stream/schema', { api_key: settings.apiKey, config: settings.generators, instruction: schemaInstruction }, chunk => setGeneratedSchema(p => p + chunk)));
+      promises.push(streamFromEndpoint('stream/schema', { api_key: generatorsApiKey, config: settings.generators, instruction: schemaInstruction }, chunk => setGeneratedSchema(p => p + chunk)));
     try { 
       await Promise.all(promises); 
     } catch { 
@@ -189,34 +187,52 @@ export default function Home() {
       delay: '',
     },
     {
+      icon: <Network size={24} />,
+      title: 'Multi-Provider by Design',
+      desc: 'Bring your own Gemini, OpenAI, Anthropic, Groq, or OpenRouter key. Every agent role picks its own provider and model independently, with live model discovery for Groq and OpenRouter\'s fast-moving catalogs.',
+      delay: 'reveal-delay-1',
+    },
+    {
+      icon: <MessageSquare size={24} />,
+      title: 'AI Co-Pilot',
+      desc: 'A conversational assistant that reads and searches your live prompt and schema, shows its tool calls as it works, and proposes synchronized prompt + schema updates you review before applying.',
+      delay: 'reveal-delay-2',
+    },
+    {
+      icon: <FlaskConical size={24} />,
+      title: 'Test & Optimization Lab',
+      desc: 'Generate a grounded Knowledge Base, acceptance criteria, and a tiered test suite, then run an autonomous or human-reviewed optimization loop — with live diffs for every prompt and schema change, iteration by iteration.',
+      delay: 'reveal-delay-3',
+    },
+    {
       icon: <Layers size={24} />,
       title: 'Full-Featured Editor',
       desc: 'CodeMirror integration providing line numbers, real-time syntax highlighting for JSON & Markdown, and synchronized split-pane scrolling.',
-      delay: 'reveal-delay-1',
+      delay: 'reveal-delay-4',
     },
     {
       icon: <Cpu size={24} />,
       title: 'Granular Multi-Agent Configs',
-      desc: 'Independently configure LLM models and explicit Thinking Budgets for the Orchestrator, Generator, and Verifier agents.',
-      delay: 'reveal-delay-2',
-    },
-    {
-      icon: <ShieldCheck size={24} />,
-      title: 'Secure & Deployment Ready',
-      desc: 'Render-ready architecture. API keys are handled purely in-memory via React state and payload injection, with zero backend persistence.',
-      delay: 'reveal-delay-3',
-    },
-    {
-      icon: <Play size={24} />,
-      title: 'Integrated Trial Run Console',
-      desc: 'Instantly test your schema and prompt against live APIs. Supports Gemma 4 and Gemini models with configurable thinking budgets.',
-      delay: 'reveal-delay-4',
+      desc: 'Independently configure the provider, model, and Thinking Level for every agent role — Orchestrator, Generators, Verifier, and the Lab\'s Runner, Evaluator, and Optimizer.',
+      delay: 'reveal-delay-5',
     },
     {
       icon: <Wand2 size={24} />,
       title: 'Auto-Fix Alignment',
       desc: 'A dedicated Verification Agent constantly audits your schema and prompt for contradictions, automatically patching them into perfect sync.',
-      delay: 'reveal-delay-5',
+      delay: 'reveal-delay-6',
+    },
+    {
+      icon: <Play size={24} />,
+      title: 'Integrated Trial Run Console',
+      desc: 'Instantly test your schema and prompt against live APIs from any configured provider, with per-model thinking controls that adapt to what each model actually supports.',
+      delay: 'reveal-delay-7',
+    },
+    {
+      icon: <ShieldCheck size={24} />,
+      title: 'Secure & Deployment Ready',
+      desc: 'Render-ready architecture. API keys are handled purely in-memory via React state and payload injection, with zero backend persistence.',
+      delay: 'reveal-delay-8',
     },
   ];
 

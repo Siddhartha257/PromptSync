@@ -39,11 +39,12 @@ function GlobalLayout({ children }: { children: React.ReactNode }) {
               width: 30,
               height: 30,
               borderRadius: 8,
-              background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-hover))',
+              // Matte in dark mode: flat single-tone fill, no glow — light mode keeps the gradient badge.
+              background: theme === 'dark' ? 'var(--accent-primary)' : 'linear-gradient(135deg, var(--accent-primary), var(--accent-hover))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 2px 12px var(--accent-glow)',
+              boxShadow: theme === 'dark' ? 'none' : '0 2px 12px var(--accent-glow)',
             }}
           >
             <Zap size={16} color="#fff" strokeWidth={2.5} />

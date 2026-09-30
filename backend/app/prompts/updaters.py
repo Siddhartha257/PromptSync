@@ -18,6 +18,11 @@ The `search` string MUST be an EXACT, character-for-character copy of the origin
 - NEVER use `...` to truncate the `search` string.
 - Include all necessary leading or trailing lines to make the `search` string unique within the document.
 If the `search` string does not exactly match the original text, the patch will fail and corrupt the prompt!
+
+CRITICAL VERBATIM PRESERVATION RULE:
+If the UPDATE INSTRUCTION provides exact replacement text (e.g. "Replace with this exact content verbatim: ..."), you MUST use that provided text VERBATIM in your `replace` field.
+- DO NOT rewrite, rephrase, summarize, or re-invent the provided content.
+- Use the exact text provided in the instruction!
 </objective>
 
 <how_to_read_the_plan>
@@ -94,6 +99,10 @@ For EACH change in the plan, check every one of the following 9 location types a
 9. **Closing Rule / Footer Instructions**
    (Any closing constraint or reminder — <closing_rule>, REMINDER:, "Your entire response must be...", "Return ONLY...")
    - If it references specific field names or counts of required fields, update accordingly.
+
+10. **Schema Meta-Properties Sweep ($schema, $id, $defs, additionalProperties)**
+    - NEVER let "$schema", "$id", "$defs", or "additionalProperties" appear in the prompt's output format, rules, or example outputs.
+    - If the plan or original prompt has "$schema", remove it from output format and examples, and ensure a negative rule explicitly forbids schema meta-properties in the output JSON.
 
 **STALE REFERENCE SWEEP (Always run after all edits)**
 After generating all edits, do a final full-document scan for any remaining occurrences of:

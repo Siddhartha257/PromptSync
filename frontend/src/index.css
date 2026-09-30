@@ -4,37 +4,40 @@
    DESIGN TOKENS
 ───────────────────────────────────────────── */
 :root {
-  /* Light Theme */
-  --bg-primary:      #f0f4f8;
+  /* Light Theme — Apple's own systemGroupedBackground palette: a neutral, barely-there cool
+     gray canvas (not a saturated color wash) with crisp white cards, one single accent hue
+     (systemBlue) used everywhere, and zero secondary/decorative hues (no violet, no pink) so
+     nothing competes with it. --success stays green by universal pass/fail convention only. */
+  --bg-primary:      #f2f2f7;
   --bg-secondary:    #ffffff;
-  --bg-tertiary:     #e8eef5;
+  --bg-tertiary:     #e5e5ea;
   --bg-glass:        rgba(255, 255, 255, 0.65);
   --bg-glass-modal:  rgba(255, 255, 255, 0.88);
-  --border-color:    rgba(0, 0, 0, 0.08);
+  --border-color:    rgba(60, 60, 67, 0.12);
   --border-glass:    rgba(255, 255, 255, 0.6);
 
-  --text-primary:    #0d1117;
-  --text-secondary:  #4a5568;
-  --text-muted:      #8a9bb5;
+  --text-primary:    #1c1c1e;
+  --text-secondary:  #6c6c70;
+  --text-muted:      #aeaeb2;
 
-  --accent-primary:  #0f766e;     /* Teal 700 */
-  --accent-glow:     rgba(15, 118, 110, 0.25);
-  --accent-hover:    #0d9488;     /* Teal 600 */
-  --accent-light:    rgba(15, 118, 110, 0.12);
+  --accent-primary:  #007aff;     /* Apple systemBlue (light) — the ONLY accent hue in the app */
+  --accent-glow:     rgba(0, 122, 255, 0.22);
+  --accent-hover:    #339cff;
+  --accent-light:    rgba(0, 122, 255, 0.1);
 
-  --success:         #059669;
-  --success-bg:      rgba(5, 150, 105, 0.08);
-  --success-border:  rgba(5, 150, 105, 0.3);
-  --danger:          #dc2626;
-  --danger-bg:       rgba(220, 38, 38, 0.08);
-  --danger-border:   rgba(220, 38, 38, 0.3);
-  --warning:         #d97706;
+  --success:         #34c759;     /* Apple systemGreen (light) — semantic pass/fail only */
+  --success-bg:      rgba(52, 199, 89, 0.08);
+  --success-border:  rgba(52, 199, 89, 0.3);
+  --danger:          #ff3b30;     /* Apple systemRed (light) */
+  --danger-bg:       rgba(255, 59, 48, 0.08);
+  --danger-border:   rgba(255, 59, 48, 0.3);
+  --warning:         #ff9500;     /* Apple systemOrange (light) */
 
-  --shadow-xs:  0 1px 2px rgba(0,0,0,0.04);
-  --shadow-sm:  0 2px 8px rgba(0,0,0,0.06);
-  --shadow-md:  0 8px 24px rgba(0,0,0,0.1);
-  --shadow-lg:  0 20px 60px rgba(0,0,0,0.15);
-  --shadow-glow: 0 0 40px rgba(15, 118, 110, 0.15);
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-md:  0 8px 24px rgba(0, 0, 0, 0.1);
+  --shadow-lg:  0 20px 60px rgba(0, 0, 0, 0.15);
+  --shadow-glow: 0 0 40px rgba(0, 122, 255, 0.16);
 
   --radius-sm:   6px;
   --radius-md:   10px;
@@ -51,36 +54,45 @@
 }
 
 [data-theme='dark'] {
-  /* Deep Teal/Slate dark palette — zero purple */
-  --bg-primary:      #020c0c;
-  --bg-secondary:    #071515;
-  --bg-tertiary:     #0d2020;
-  --bg-glass:        rgba(7, 21, 21, 0.70);
-  --bg-glass-modal:  rgba(7, 21, 21, 0.92);
-  --border-color:    rgba(255, 255, 255, 0.06);
-  --border-glass:    rgba(20, 184, 166, 0.12);
+  /* True black, Apple-style layered elevation — zero green/teal anywhere. Each surface step
+     is a genuinely distinct neutral gray (not one flat black) so panels/cards/modals visibly
+     separate from the base canvas and from each other, instead of reading as a blank screen. */
+  --bg-primary:      #050506;     /* base canvas — near-OLED black */
+  --bg-secondary:    #1c1c1e;     /* elevated surface (cards, panels) */
+  --bg-tertiary:     #2c2c2e;     /* further-elevated / nested panels */
+  /* Matte: fully opaque, no translucency — surfaces that used to be "frosted glass" (header,
+     modals, toasts, alerts) are flat solid panels in dark mode. See the MATTE DARK MODE
+     OVERRIDES section further down for the backdrop-filter removal on each of those. */
+  --bg-glass:        #16171a;
+  --bg-glass-modal:  #101012;
+  --border-color:    rgba(255, 255, 255, 0.09);
+  --border-glass:    rgba(255, 255, 255, 0.12);
 
-  --text-primary:    #e2fafa;
-  --text-secondary:  #7fa8a8;
-  --text-muted:      #3d6464;
+  --text-primary:    #f5f5f7;
+  --text-secondary:  #98989d;
+  --text-muted:      #636366;
 
-  --accent-primary:  #14b8a6;     /* Teal 500 */
-  --accent-glow:     rgba(20, 184, 166, 0.3);
-  --accent-hover:    #2dd4bf;     /* Teal 400 */
-  --accent-light:    rgba(20, 184, 166, 0.08);
+  --accent-primary:  #0a84ff;     /* Apple systemBlue (dark) — the one deliberate accent color */
+  --accent-glow:     rgba(10, 132, 255, 0.32);
+  --accent-hover:    #409cff;
+  --accent-light:    rgba(10, 132, 255, 0.12);
 
-  --success:         #10b981;
-  --success-bg:      rgba(16, 185, 129, 0.08);
-  --success-border:  rgba(16, 185, 129, 0.25);
-  --danger:          #f87171;
-  --danger-bg:       rgba(248, 113, 113, 0.08);
-  --danger-border:   rgba(248, 113, 113, 0.25);
+  --success:         #30d158;     /* Apple systemGreen (dark) — semantic pass/fail only */
+  --success-bg:      rgba(48, 209, 88, 0.1);
+  --success-border:  rgba(48, 209, 88, 0.28);
+  --danger:          #ff453a;     /* Apple systemRed (dark) */
+  --danger-bg:       rgba(255, 69, 58, 0.1);
+  --danger-border:   rgba(255, 69, 58, 0.28);
 
-  --shadow-xs:  0 1px 2px rgba(0,0,0,0.3);
-  --shadow-sm:  0 2px 8px rgba(0,0,0,0.4);
-  --shadow-md:  0 8px 24px rgba(0,0,0,0.5);
-  --shadow-lg:  0 20px 60px rgba(0,0,0,0.7);
-  --shadow-glow: 0 0 60px rgba(20, 184, 166, 0.12);
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.4);
+  --shadow-sm:  0 2px 8px rgba(0,0,0,0.5);
+  --shadow-md:  0 8px 24px rgba(0,0,0,0.6);
+  --shadow-lg:  0 20px 60px rgba(0,0,0,0.8);
+  /* Matte: no ambient accent-colored glow — plain neutral shadows only. Kept as a valid,
+     zero-visibility shadow (rather than `none`) since it's always used as one layer of a
+     comma-separated box-shadow list (e.g. `var(--shadow-lg), var(--shadow-glow)`), where a
+     bare `none` would be invalid CSS. */
+  --shadow-glow: 0 0 0 rgba(0, 0, 0, 0);
 }
 
 /* ─────────────────────────────────────────────
@@ -120,21 +132,21 @@ body {
 }
 
 .app-container::before {
+  /* Single-hue blue wash — two soft blue glows, no second accent color, so nothing competes
+     with the one accent hue used throughout the app. */
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse 60% 50% at 10% 20%, rgba(20, 184, 166, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 40% at 90% 80%, rgba(15, 118, 110, 0.05) 0%, transparent 60%);
+    radial-gradient(ellipse 60% 50% at 10% 20%, rgba(0, 122, 255, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 90% 80%, rgba(0, 122, 255, 0.035) 0%, transparent 60%);
 }
 
 [data-theme='dark'] .app-container::before {
-  background:
-    radial-gradient(ellipse 60% 50% at 10% 20%, rgba(20, 184, 166, 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 40% at 90% 80%, rgba(15, 118, 110, 0.07) 0%, transparent 60%),
-    radial-gradient(ellipse 30% 30% at 50% 10%, rgba(20, 184, 166, 0.04) 0%, transparent 50%);
+  /* Matte: no ambient glow mesh — a flat, uniform black canvas instead of a lit gradient. */
+  background: none;
 }
 
 /* ─────────────────────────────────────────────
@@ -594,7 +606,7 @@ body {
 
 .alert-success {
   border-left: 4px solid var(--success);
-  background: rgba(16, 185, 129, 0.05);
+  background: var(--success-bg);
 }
 .alert-success .lucide {
   color: var(--success);
@@ -731,6 +743,11 @@ body {
 .reveal-delay-1 { transition-delay: 0.1s; }
 .reveal-delay-2 { transition-delay: 0.2s; }
 .reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-5 { transition-delay: 0.5s; }
+.reveal-delay-6 { transition-delay: 0.6s; }
+.reveal-delay-7 { transition-delay: 0.7s; }
+.reveal-delay-8 { transition-delay: 0.8s; }
 
 /* ─────────────────────────────────────────────
    ANIMATIONS
@@ -966,4 +983,1117 @@ body {
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+/* ─────────────────────────────────────────────
+   PROMPTER CO-PILOT CHAT SIDEBAR
+───────────────────────────────────────────── */
+.copilot-sidebar {
+  width: 420px;
+  min-width: 360px;
+  max-width: 480px;
+  height: 100%;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 20;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+  animation: slideInRight 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.copilot-header {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
+.copilot-icon-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--success);
+  display: inline-block;
+  box-shadow: 0 0 8px var(--success);
+}
+
+.icon-btn-small {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-base);
+}
+
+.icon-btn-small:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.icon-btn-small:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.copilot-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.copilot-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin: auto 0;
+  padding: 24px 12px;
+}
+
+.empty-sparkle-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--bg-tertiary);
+  color: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-glass);
+}
+
+.suggestion-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.chip-btn {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.chip-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  background: var(--bg-glass);
+}
+
+.chat-message-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 12px;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.chat-message-row.user {
+  flex-direction: row-reverse;
+}
+
+.chat-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.chat-avatar.user {
+  background: var(--accent-primary);
+  color: #fff;
+  box-shadow: 0 2px 6px var(--accent-glow);
+}
+
+.chat-avatar.model {
+  background: var(--bg-tertiary);
+  color: var(--accent-primary);
+  border: 1px solid var(--border-color);
+}
+
+.chat-bubble {
+  max-width: 86%;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.chat-bubble.user {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-top-right-radius: 4px;
+  box-shadow: var(--shadow-sm);
+}
+
+.chat-bubble.user p {
+  color: #ffffff;
+  margin: 0;
+}
+
+.chat-bubble.model {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-top-left-radius: 4px;
+  box-shadow: var(--shadow-xs);
+  flex: 1;
+}
+
+.chat-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.chat-meta .sender {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Tool Activity dropdown: a single compact toggle line ("Working…" / "3 steps") that expands
+   into the actual grep/read steps — keeps the chat minimal by default, but lets you see exactly
+   what the Co-Pilot is doing (and did) on demand. */
+.tool-activity {
+  margin-bottom: 10px;
+}
+
+.tool-activity-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.tool-activity-toggle:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.tool-activity-chevron {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+
+.tool-activity-chevron.open {
+  transform: rotate(180deg);
+}
+
+.tool-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border-color);
+}
+
+.tool-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  padding: 2px 0;
+}
+
+.tool-item-done {
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+.tool-item-spin {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+  animation: spin 1s linear infinite;
+}
+
+.tool-item-text {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-proposal-card {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.09), rgba(0, 122, 255, 0.02));
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.08);
+}
+
+.proposal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: var(--accent-light);
+  color: var(--accent-primary);
+  width: fit-content;
+}
+
+.proposal-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.instruction-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  font-size: 0.78rem;
+}
+
+.inst-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.inst-text {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.proposal-apply-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-top: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.copilot-input-container {
+  padding: 12px 16px 14px 16px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+
+.copilot-input-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  transition: var(--transition-base);
+  overflow: hidden;
+}
+
+.copilot-input-card:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.copilot-chat-textarea,
+.copilot-textarea {
+  width: 100%;
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  padding: 10px 14px 6px 14px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  min-height: 48px;
+  max-height: 140px;
+  box-sizing: border-box;
+}
+
+.copilot-chat-textarea::placeholder,
+.copilot-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.copilot-chat-textarea:disabled,
+.copilot-textarea:disabled {
+  opacity: 0.6;
+}
+
+.copilot-input-footer,
+.copilot-input-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px 8px 12px;
+}
+
+.copilot-input-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.copilot-input-shortcut kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 0.68rem;
+  font-family: var(--font-sans);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.copilot-input-shortcut .shortcut-sep {
+  opacity: 0.4;
+  margin: 0 1px;
+}
+
+.copilot-send-button,
+.copilot-send-btn,
+.send-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-base);
+  flex-shrink: 0;
+}
+
+.copilot-send-button:hover:not(:disabled),
+.copilot-send-btn:hover:not(:disabled),
+.send-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px var(--accent-glow);
+}
+
+.copilot-send-button:active:not(:disabled),
+.copilot-send-btn:active:not(:disabled),
+.send-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.copilot-send-button:disabled,
+.copilot-send-btn:disabled,
+.send-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ─────────────────────────────────────────────
+   MARKDOWN RENDERER STYLES (CO-PILOT CHAT)
+───────────────────────────────────────────── */
+.markdown-renderer {
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.md-p {
+  margin: 6px 0;
+}
+
+.md-p:first-child {
+  margin-top: 0;
+}
+
+.md-p:last-child {
+  margin-bottom: 0;
+}
+
+.md-bold {
+  font-weight: 600;
+  color: inherit;
+}
+
+.md-italic {
+  font-style: italic;
+  opacity: 0.9;
+}
+
+.md-inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-glass);
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--accent-primary);
+}
+
+[data-theme='light'] .md-inline-code {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.md-code-container {
+  margin: 10px 0;
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.md-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.md-code-lang {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.md-copy-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: var(--transition-base);
+}
+
+.md-copy-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.md-code-pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.md-blockquote {
+  border-left: 3px solid var(--accent-primary);
+  margin: 8px 0;
+  padding: 4px 12px;
+  background: rgba(139, 92, 246, 0.05);
+  border-radius: 0 4px 4px 0;
+  color: var(--text-secondary);
+}
+
+.md-list {
+  margin: 6px 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.md-list li {
+  line-height: 1.5;
+}
+
+.md-h2, .md-h3, .md-h4 {
+  font-weight: 600;
+  margin: 12px 0 4px 0;
+  color: var(--text-primary);
+}
+
+.md-h2 { font-size: 1.05rem; }
+.md-h3 { font-size: 0.95rem; }
+.md-h4 { font-size: 0.88rem; }
+
+.md-hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 14px 0;
+}
+
+.md-task-item {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.md-checkbox {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  line-height: 1;
+  color: var(--bg-primary);
+}
+
+.md-checkbox.checked {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.md-task-done {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.md-table-wrap {
+  margin: 10px 0;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.md-table th,
+.md-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.md-table th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.md-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.md-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ─────────────────────────────────────────────
+   UNIFIED RIGHT STUDIO DOCK (CURSOR / LINEAR STYLE)
+───────────────────────────────────────────── */
+.studio-dock {
+  width: 520px;
+  min-width: 440px;
+  max-width: 620px;
+  height: 100%;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 25;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.16);
+  animation: slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+@media (max-width: 1280px) {
+  .studio-dock {
+    width: 460px;
+    min-width: 380px;
+  }
+}
+
+.studio-dock-header {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+
+.studio-dock-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-tertiary);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.dock-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: var(--transition-base);
+  position: relative;
+}
+
+.dock-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.dock-tab-btn.active {
+  color: var(--accent-primary);
+  background: var(--bg-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.dock-pulse-badge {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  display: inline-block;
+  animation: pulseGlow 1.4s infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.3); }
+}
+
+.studio-dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-dock-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.dock-view-copilot,
+.dock-view-lab,
+.dock-view-trial {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Optimization Lab Subtabs */
+.lab-subtabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+
+.lab-subtab-btn {
+  flex: 1;
+  padding: 9px 4px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-align: center;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.lab-subtab-btn:hover {
+  color: var(--text-primary);
+}
+
+.lab-subtab-btn.active {
+  color: var(--accent-primary);
+  font-weight: 600;
+  border-bottom-color: var(--accent-primary);
+  background: var(--bg-tertiary);
+}
+
+.lab-content-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* Studio Cards & Inputs */
+.studio-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: var(--transition-base);
+}
+
+.studio-card:hover {
+  border-color: var(--border-hover);
+}
+
+.studio-card-header {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.studio-textarea {
+  width: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.5;
+  outline: none;
+  transition: var(--transition-base);
+}
+
+.studio-textarea:focus {
+  border-color: var(--accent-primary);
+}
+
+.studio-input {
+  flex: 1;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  outline: none;
+  transition: var(--transition-base);
+}
+
+.studio-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.studio-select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 5px 8px;
+  font-size: 0.78rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.btn-text-link {
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  font-size: 0.74rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  transition: var(--transition-base);
+}
+
+.btn-text-link:hover:not(:disabled) {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+.btn-text-link:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tag-pill {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.criteria-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.icon-btn-micro {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: var(--transition-base);
+}
+
+.icon-btn-micro:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.tier-pill {
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.tier-pill:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.tier-pill.active {
+  background: var(--accent-light);
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.query-card {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.tier-tag {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+/* ── Optimization Window: inline query editor ── */
+.studio-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.studio-input:focus {
+  border-color: var(--accent-primary);
+}
+
+/* ── Printable report area ── */
+.printable-report {
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+@media print {
+  /* Hide everything except the report */
+  body * { visibility: hidden; }
+  .printable-report,
+  .printable-report * { visibility: visible; }
+  .printable-report {
+    position: fixed;
+    inset: 0;
+    background: white !important;
+    color: black !important;
+    padding: 32px 48px;
+    font-size: 12pt;
+    line-height: 1.8;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  .printable-report h1 { font-size: 20pt; margin-bottom: 12pt; }
+  .printable-report h2 { font-size: 15pt; margin-top: 18pt; margin-bottom: 8pt; }
+  .printable-report h3 { font-size: 12pt; margin-top: 14pt; margin-bottom: 6pt; }
+  .printable-report table { width: 100%; border-collapse: collapse; }
+  .printable-report th, .printable-report td { border: 1px solid #ccc; padding: 6pt 8pt; }
+  .printable-report code, .printable-report pre { background: #f5f5f5 !important; font-size: 9pt; }
+}
+
+/* ─────────────────────────────────────────────
+   MATTE DARK MODE OVERRIDES
+   Dark mode only (light mode is untouched). Removes every glossy/reflective effect — glass
+   blur, colored ambient glows, and gradient fills — in favor of flat, opaque, single-tone
+   surfaces. The dark-theme tokens above (--bg-glass, --bg-glass-modal, --shadow-glow, the
+   mesh background) already carry most of this; the rules below catch every remaining
+   component that hardcodes a gradient or an accent-glow blur instead of using those tokens.
+───────────────────────────────────────────── */
+
+/* No frosted-glass blur anywhere — surfaces are flat opaque panels instead. */
+[data-theme='dark'] .header,
+[data-theme='dark'] .bottom-bar,
+[data-theme='dark'] .glass-panel,
+[data-theme='dark'] .alert,
+[data-theme='dark'] .action-card,
+[data-theme='dark'] .toast {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* .glass-modal sets backdrop-filter with !important, so the override needs it too. */
+[data-theme='dark'] .glass-modal {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Primary buttons: flat single-tone fill instead of a gradient, no ambient glow on hover. */
+[data-theme='dark'] .btn-primary {
+  background: var(--accent-primary);
+  box-shadow: none;
+}
+[data-theme='dark'] .btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: none;
+}
+
+/* Co-Pilot icon badge: flat fill instead of a gradient, no glow. */
+[data-theme='dark'] .copilot-icon-badge {
+  background: var(--accent-primary);
+  box-shadow: none;
+}
+
+/* Small accent-tinted elevation shadows flattened to neutral (0-blur focus rings elsewhere are
+   left untouched — a solid outline isn't a "shine" effect). */
+[data-theme='dark'] .chat-avatar.user {
+  box-shadow: none;
+}
+[data-theme='dark'] .copilot-send-button:hover:not(:disabled),
+[data-theme='dark'] .copilot-send-btn:hover:not(:disabled),
+[data-theme='dark'] .send-btn:hover:not(:disabled) {
+  box-shadow: none;
+}
+[data-theme='dark'] .action-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* Co-Pilot action-proposal card: flat accent-tinted fill instead of a blue→violet gradient. */
+[data-theme='dark'] .action-proposal-card {
+  background: var(--accent-light);
+}
+
+/* Home page feature-card hover sheen: removed (the gradient overlay itself, not just its color). */
+[data-theme='dark'] .feature-card::before {
+  display: none;
 }

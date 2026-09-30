@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List
+from typing import List, Optional
 
 from app.core.llm import LLMCaller
 from app.utils.patcher import SearchReplaceEdit
@@ -17,10 +17,12 @@ class PromptUpdaterAgent:
     def __init__(self, llm_caller: LLMCaller = None):
         self.llm_caller = llm_caller or LLMCaller()
 
-    def generate_edits(self, original_prompt: str, instruction: str) -> List[SearchReplaceEdit]:
+    def generate_edits(self, original_prompt: str, instruction: str, retry_note: Optional[str] = None) -> List[SearchReplaceEdit]:
         logger.info("PromptUpdaterAgent: Generating prompt edits...")
         input_text = f"ORIGINAL PROMPT:\n{original_prompt}\n\nUPDATE INSTRUCTION:\n{instruction}"
-        
+        if retry_note:
+            input_text += f"\n\n{retry_note}"
+
         response_text = self.llm_caller.run(
             input_text=input_text,
             system_prompt=PROMPT_UPDATER_SYSTEM_PROMPT,
@@ -28,10 +30,12 @@ class PromptUpdaterAgent:
         )
         return self._parse_response(response_text)
 
-    async def generate_edits_async(self, original_prompt: str, instruction: str) -> List[SearchReplaceEdit]:
+    async def generate_edits_async(self, original_prompt: str, instruction: str, retry_note: Optional[str] = None) -> List[SearchReplaceEdit]:
         logger.info("PromptUpdaterAgent: Generating prompt edits (async)...")
         input_text = f"ORIGINAL PROMPT:\n{original_prompt}\n\nUPDATE INSTRUCTION:\n{instruction}"
-        
+        if retry_note:
+            input_text += f"\n\n{retry_note}"
+
         response_text = await self.llm_caller.run_async(
             input_text=input_text,
             system_prompt=PROMPT_UPDATER_SYSTEM_PROMPT,
@@ -65,10 +69,12 @@ class SchemaUpdaterAgent:
     def __init__(self, llm_caller: LLMCaller = None):
         self.llm_caller = llm_caller or LLMCaller()
 
-    def generate_edits(self, original_schema: str, instruction: str) -> List[JsonPatchEdit]:
+    def generate_edits(self, original_schema: str, instruction: str, retry_note: Optional[str] = None) -> List[JsonPatchEdit]:
         logger.info("SchemaUpdaterAgent: Generating schema JSON patches...")
         input_text = f"ORIGINAL JSON SCHEMA:\n{original_schema}\n\nUPDATE INSTRUCTION:\n{instruction}"
-        
+        if retry_note:
+            input_text += f"\n\n{retry_note}"
+
         response_text = self.llm_caller.run(
             input_text=input_text,
             system_prompt=SCHEMA_UPDATER_SYSTEM_PROMPT,
@@ -76,10 +82,12 @@ class SchemaUpdaterAgent:
         )
         return self._parse_response(response_text)
 
-    async def generate_edits_async(self, original_schema: str, instruction: str) -> List[JsonPatchEdit]:
+    async def generate_edits_async(self, original_schema: str, instruction: str, retry_note: Optional[str] = None) -> List[JsonPatchEdit]:
         logger.info("SchemaUpdaterAgent: Generating schema JSON patches (async)...")
         input_text = f"ORIGINAL JSON SCHEMA:\n{original_schema}\n\nUPDATE INSTRUCTION:\n{instruction}"
-        
+        if retry_note:
+            input_text += f"\n\n{retry_note}"
+
         response_text = await self.llm_caller.run_async(
             input_text=input_text,
             system_prompt=SCHEMA_UPDATER_SYSTEM_PROMPT,

@@ -38,10 +38,17 @@ class TextPatcher:
         self,
         match_threshold: float = 0.4,
         match_distance: int = 10**9,
-        patch_margin: int = 32,
+        patch_margin: int = 4,
         delete_threshold: float = 0.5,
         debug: bool = False
     ):
+        # NOTE: patch_margin MUST stay well below diff_match_patch's Match_MaxBits (32).
+        # patch_splitMax()'s inner loop bound is `Match_MaxBits - Patch_Margin`; if that hits
+        # zero (e.g. patch_margin=32 == Match_MaxBits), the loop can never consume any of the
+        # oversized patch's diffs and spins forever. This previously hung indefinitely on the
+        # exact case this class exists to handle: an LLM `search` string that isn't found in the
+        # document, where boundary padding pushes the patch just over Match_MaxBits. 4 matches
+        # diff_match_patch's own documented default.
         self.dmp = diff_match_patch()
         self.dmp.Match_Threshold = match_threshold
         self.dmp.Match_Distance = match_distance
@@ -205,3 +212,23 @@ def apply_llm_edits(
 ) -> ApplyEditsResult:
     patcher = TextPatcher(debug=debug, **kwargs)
     return patcher.apply_edits(full_text, edits)
+
+
+def format_retry_context(edits: List[SearchReplaceEdit], patch_result: ApplyEditsResult) -> str:
+    """Builds a correction prompt listing the exact, verbatim 'search' snippets that
+    failed to apply, so a follow-up LLM call can re-emit edits that actually match the
+    real document text instead of a hallucinated paraphrase of it."""
+    failed_snippets = []
+    for idx, (edit, result) in enumerate(zip(edits, patch_result.edit_results), start=1):
+        if not result.success:
+            failed_snippets.append(f"{idx}. SEARCH (not found verbatim in the document):\n---\n{edit.search}\n---")
+
+    return (
+        "RETRY — PREVIOUS ATTEMPT FAILED TO APPLY:\n"
+        "The following 'search' snippet(s) could not be located character-for-character in the ORIGINAL PROMPT "
+        "text provided above. Re-emit ALL edits again from scratch, but this time copy each 'search' field "
+        "EXACTLY verbatim — including whitespace, punctuation, and line breaks — directly from the ORIGINAL "
+        "PROMPT text. Do not reconstruct or paraphrase it from memory. If the target content no longer exists "
+        "or was already changed, adjust the edit to match the current text instead.\n\n"
+        + "\n\n".join(failed_snippets)
+    )

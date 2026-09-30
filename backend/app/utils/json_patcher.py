@@ -100,3 +100,20 @@ class JsonSchemaPatchEngine:
                 applied_patch=[],
                 error=str(e),
             )
+
+
+def format_retry_context(edits: List[JsonPatchEdit], patch_result: PatchResult) -> str:
+    """Builds a correction prompt listing the exact JSON Pointer paths that failed to apply,
+    so a follow-up LLM call can re-emit patch ops that reference real paths in the schema."""
+    failed_ops = "\n".join(f"- op='{e.op}' path='{e.path}'" for e in edits)
+    return (
+        "RETRY — PREVIOUS ATTEMPT FAILED TO APPLY:\n"
+        f"Error: {patch_result.error}\n\n"
+        "The JSON Patch batch below was rejected as a whole (RFC 6902 patches are all-or-nothing) because at least "
+        "one 'path' does not exist in, or is incompatible with, the ORIGINAL JSON SCHEMA provided above. "
+        "Re-emit ALL patch operations again, but this time verify each 'path' is a valid JSON Pointer that "
+        "actually exists in the CURRENT schema structure shown above before using 'replace' or 'remove', and that "
+        "every parent object/array in the path exists before using 'add'.\n\n"
+        "Failed operation(s) from the previous attempt:\n"
+        f"{failed_ops}"
+    )
