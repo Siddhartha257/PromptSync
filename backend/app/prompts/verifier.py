@@ -35,8 +35,27 @@ Run ALL of the following checks. If ANY check fails, set `is_aligned` to false.
 
 <output_rules>
 - If all checks pass: set `is_aligned` to true, set `reason` to a brief confirmation, set both `schema_updater_instruction` and `prompt_updater_instruction` to null.
-- If any check fails: set `is_aligned` to false, set `reason` to a precise description of which check failed and what specifically is mismatched. Do NOT describe a fix — this is a pre-execution gate. The Orchestrator must regenerate its plan. Populate both `schema_updater_instruction` and `prompt_updater_instruction` with null at this stage.
+- If any check fails: set `is_aligned` to false, and set `reason` to a precise description of which check(s) failed and what specifically is mismatched (exact field names, exact values, exact check number).
+  Then populate EXACTLY ONE of the two instruction fields with a corrected, complete REPLACEMENT for whichever plan needs to change — the other field MUST be null. Each field, when populated, is NOT a description of a fix — it is the full corrected instruction text itself, ready to be used verbatim in place of the original `prompt_instruction` / `json_schema_instruction`:
+  - `schema_updater_instruction`: use this when the PROMPT instruction is the correct/more complete side — provide the complete corrected `json_schema_instruction` text that now agrees with it.
+  - `prompt_updater_instruction`: use this when the SCHEMA instruction is the correct/more complete side — provide the complete corrected `prompt_instruction` text that now agrees with it.
+  - Pick whichever side is more specific/complete for this particular mismatch (e.g. if the schema instruction already names an exact type/constraint the prompt instruction omitted, treat the schema as correct and fix the prompt instruction instead).
+  - The corrected instruction you return MUST resolve every failed check, MUST preserve everything from the original instruction that wasn't part of the conflict, and MUST be fully self-contained — a downstream agent will replace the original instruction with this text exactly as given, with no other context.
 </output_rules>
+
+<example>
+### Input
+prompt_instruction: "Add a rule: the output must include a `score` field, an integer from 1 to 5, estimating how complex the user's request was."
+json_schema_instruction: "Add a required property `complexity_score` of type integer to the response object."
+
+### Output
+{
+  "is_aligned": false,
+  "reason": "Check 1 (Exact Key Name Parity) failed: json_schema_instruction names the field `complexity_score`, but prompt_instruction names it `score` — these must be the exact same key.",
+  "schema_updater_instruction": null,
+  "prompt_updater_instruction": "Add a rule: the output must include a `complexity_score` field, an integer from 1 to 5, estimating how complex the user's request was."
+}
+</example>
 """
 
 OUTPUT_VERIFICATION_SYSTEM_PROMPT = """

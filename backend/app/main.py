@@ -50,6 +50,7 @@ app.add_middleware(
 json_patch_engine = JsonSchemaPatchEngine(debug=True)
 
 MAX_PATCH_ATTEMPTS = 2  # 1 initial generation + 1 LLM self-correction retry on failed patch application
+MAX_VERIFY_ATTEMPTS = 2  # 1 initial check + 1 auto-correction retry on a detected plan misalignment
 
 def resolve_model_provider_and_key(
     model_name: str,
@@ -327,7 +328,42 @@ def verify_alignment(req: VerifyRequest):
     try:
         caller = get_caller(req)
         verification_agent = VerificationAgent(llm_caller=caller)
-        result = verification_agent.verify_alignment(req.prompt_instruction, req.schema_instruction)
+
+        prompt_instruction = req.prompt_instruction
+        schema_instruction = req.schema_instruction
+        auto_fixed = False
+        result = {}
+
+        # Mirrors the patch-retry pattern used for prompt/schema edits: on a detected
+        # misalignment, don't just report it — apply the verifier's own suggested fix and
+        # re-check once before surfacing anything to the user. The suggestion is itself draft
+        # replacement text for whichever side is wrong (schema_updater_instruction to fix the
+        # schema side, prompt_updater_instruction to fix the prompt side) — prefer fixing the
+        # schema to match the prompt, since the prompt is normally the primary statement of
+        # intent, falling back to a prompt-side fix only if no schema-side suggestion was given.
+        for attempt in range(1, MAX_VERIFY_ATTEMPTS + 1):
+            result = verification_agent.verify_alignment(prompt_instruction, schema_instruction)
+            if result.get("is_aligned"):
+                break
+            if attempt >= MAX_VERIFY_ATTEMPTS:
+                break
+            fix_schema = result.get("schema_updater_instruction")
+            fix_prompt = result.get("prompt_updater_instruction")
+            if fix_schema:
+                schema_instruction = fix_schema
+            elif fix_prompt:
+                prompt_instruction = fix_prompt
+            else:
+                break  # nothing to auto-correct with — no point retrying
+            auto_fixed = True
+            logger.info(
+                f"Verification: misalignment detected, auto-correcting via "
+                f"{'schema' if fix_schema else 'prompt'}_updater_instruction and re-verifying..."
+            )
+
+        result["prompt_instruction"] = prompt_instruction
+        result["schema_instruction"] = schema_instruction
+        result["auto_fixed"] = auto_fixed
         return result
     except HTTPException:
         raise

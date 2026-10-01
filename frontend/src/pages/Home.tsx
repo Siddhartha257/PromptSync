@@ -37,7 +37,10 @@ export default function Home() {
 
   // Verification state
   const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<{ is_aligned: boolean; reason: string } | null>(null);
+  const [verificationResult, setVerificationResult] = useState<{
+    is_aligned: boolean; reason: string; auto_fixed?: boolean;
+    schema_updater_instruction?: string | null; prompt_updater_instruction?: string | null;
+  } | null>(null);
 
   // Stream state
   const [isStreaming, setIsStreaming] = useState(false);
@@ -98,16 +101,23 @@ export default function Home() {
     }
   };
 
-  const handleVerify = async () => {
+  const handleVerify = async (overridePromptInstruction?: string, overrideSchemaInstruction?: string) => {
     setIsVerifying(true);
     try {
       const res = await axios.post(`${API_URL}/verify`, {
         api_key: getKeyForModel(settings.apiKeys, settings.verifier.model, settings.verifier.provider),
         config: settings.verifier,
-        prompt_instruction: promptInstruction,
-        schema_instruction: schemaInstruction,
+        prompt_instruction: overridePromptInstruction ?? promptInstruction,
+        schema_instruction: overrideSchemaInstruction ?? schemaInstruction,
       });
       setVerificationResult(res.data);
+      // The backend auto-corrects a detected misalignment once (using its own suggested fix)
+      // before replying — reflect whatever it actually settled on back into the editable panes,
+      // so the user sees the corrected plan rather than the stale pre-fix text.
+      if (res.data.auto_fixed) {
+        setPromptInstruction(res.data.prompt_instruction);
+        setSchemaInstruction(res.data.schema_instruction);
+      }
       if (res.data.is_aligned) {
         setTimeout(() => setVerificationResult(null), 5000);
       }
@@ -115,6 +125,23 @@ export default function Home() {
       showToast('Verification failed. Check backend logs.', 'error');
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  // Manual fallback for when the backend's own one-shot auto-correction didn't resolve the
+  // misalignment — applies whichever suggestion is left (schema-side preferred) and re-verifies
+  // with it immediately (passed directly rather than relying on the just-set state, which
+  // wouldn't be visible yet in this same closure).
+  const handleApplySuggestedFix = () => {
+    if (!verificationResult) return;
+    const fixSchema = verificationResult.schema_updater_instruction;
+    const fixPrompt = verificationResult.prompt_updater_instruction;
+    if (fixSchema) {
+      setSchemaInstruction(fixSchema);
+      handleVerify(undefined, fixSchema);
+    } else if (fixPrompt) {
+      setPromptInstruction(fixPrompt);
+      handleVerify(fixPrompt, undefined);
     }
   };
 
@@ -552,13 +579,24 @@ export default function Home() {
                 <div className={`alert ${verificationResult.is_aligned ? 'alert-success' : 'alert-danger'}`} style={{ margin: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     {verificationResult.is_aligned ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-                    <strong>{verificationResult.is_aligned ? 'Instructions Aligned' : 'Misalignment Detected'}</strong>
+                    <strong>
+                      {verificationResult.is_aligned
+                        ? (verificationResult.auto_fixed ? 'Auto-Corrected — Now Aligned' : 'Instructions Aligned')
+                        : 'Misalignment Detected'}
+                    </strong>
                   </div>
                   <div style={{ fontSize: '0.85rem' }}>{verificationResult.reason}</div>
+                  {!verificationResult.is_aligned && (verificationResult.schema_updater_instruction || verificationResult.prompt_updater_instruction) && (
+                    <div style={{ marginTop: 8 }}>
+                      <button className="btn btn-outline" style={{ fontSize: '0.8rem', padding: '5px 12px' }} onClick={handleApplySuggestedFix} disabled={isVerifying}>
+                        <Wand2 size={13} /> Apply Suggested Fix
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, width: '100%' }}>
-                <button className="btn btn-outline" onClick={handleVerify} disabled={isVerifying}>
+                <button className="btn btn-outline" onClick={() => handleVerify()} disabled={isVerifying}>
                   {isVerifying ? <div className="loader" style={{ width: 15, height: 15, borderWidth: 2 }} /> : <ShieldCheck size={15} />}
                   Verify Instructions
                 </button>
